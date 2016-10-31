@@ -100,6 +100,18 @@ class Main(QMainWindow):
         self.javascriptmode.setCheckable(True)
 #        self.javascriptmode.setChecked(True)
         self.javascriptmode.triggered.connect(self.setjavascript)
+        self.zoominaction = QAction(self)
+        self.zoominaction.setText("Zoom  In")
+        self.zoominaction.setShortcut("Ctrl++")
+        self.zoominaction.triggered.connect(self.zoomin)
+        self.zoomoutaction = QAction(self)
+        self.zoomoutaction.setText("Zoom  Out")
+        self.zoomoutaction.setShortcut("Ctrl+-")
+        self.zoomoutaction.triggered.connect(self.zoomout)
+        self.fullscreenaction = QAction(self)
+        self.fullscreenaction.setText("Toggle Fullscreen")
+        self.fullscreenaction.setShortcut("F11")
+        self.fullscreenaction.triggered.connect(self.fullscreenmode)
         self.printaction = QAction(self)
         self.printaction.setText("Print")
         self.printaction.setShortcut("Ctrl+P")
@@ -108,12 +120,21 @@ class Main(QMainWindow):
         self.findaction.setText("Find Text")
         self.findaction.setShortcut("Ctrl+F")
         self.findaction.triggered.connect(self.findmode)
+        self.quitaction = QAction(self)
+        self.quitaction.setText("Quit")
+        self.quitaction.setShortcut("Ctrl+Q")
+        self.quitaction.triggered.connect(self.close)
 
         self.menu = QMenu(self)
         self.menu.addAction(self.findaction)
         self.menu.addAction(self.javascriptmode)
         self.menu.addAction(self.loadimagesaction)
+        self.menu.addAction(self.zoominaction)
+        self.menu.addAction(self.zoomoutaction)
+        self.menu.addAction(self.fullscreenaction)
         self.menu.addAction(self.printaction)
+        self.menu.addAction(self.quitaction)
+
 
 #       Create Gui Part
         grid = QGridLayout()
@@ -149,7 +170,7 @@ class Main(QMainWindow):
         self.findBtn.setToolTip("Find Text in \n This Page")
         self.findBtn.clicked.connect(self.findmode)
         self.find = QPushButton(self)
-        self.find.setText("Find")
+        self.find.setText("Find/Next")
         self.find.clicked.connect(self.findnext)
         self.find.hide()
         self.findprev = QPushButton(self)
@@ -204,7 +225,7 @@ class Main(QMainWindow):
             url = "http://www.google.com/search?q="+url 
         elif url.startswith("file:///"):
             url = url[7:]
-        elif not url.startswith(http): 
+        elif not (url.startswith(http) or url.startswith("https://")): 
             url = http + url 
         self.GoTo(url)
     def GoTo(self, url):
@@ -246,6 +267,12 @@ class Main(QMainWindow):
 #            main.web.load(QUrl("qrc:///error.html"))
         self.reload.setIcon(QIcon(":/view-refresh.png"))
         self.loading = False
+
+    def fullscreenmode(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
         print_dialog = QPrintDialog(printer, self)
@@ -265,6 +292,7 @@ class Main(QMainWindow):
         self.find.hide()
         self.findprev.hide()
         self.cancelfind.hide()
+        self.line.setText(self.web.url().toString())
     def findnext(self):
         text = self.line.text()
         self.web.findText(text)
@@ -276,7 +304,11 @@ class Main(QMainWindow):
         url = str(networkrequest.url().toString())
         Popen(["uget-gtk", url])
     def zoomin(self):
-        self.web.setZoomFactor(1.3)
+        zoomlevel = self.web.textSizeMultiplier()
+        self.web.setTextSizeMultiplier(zoomlevel+0.1) # Use setZoomFactor() to zoom text and images
+    def zoomout(self):
+        zoomlevel = self.web.textSizeMultiplier()
+        self.web.setTextSizeMultiplier(zoomlevel-0.1)
     def loadimages(self, state):
         self.settings.setAttribute(QWebSettings.AutoLoadImages, state)
     def setjavascript(self, state):
