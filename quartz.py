@@ -1,29 +1,30 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.0
+version = 1.2.2
 Dependency = python-qt4
 Usage = A Light Weight Internet Browser
 Features = Unified Search/Url Bar
            Turn Javascript, Load Images on/off
            Find Text inside page
            Print Page
-           
+           SAve page as JPG
+Last Update : confusion between search and goto fixed for UrlEdit Box.
 
- * Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
+  
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+  
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+  
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import sys
@@ -34,6 +35,7 @@ from PyQt4.QtCore import QUrl, pyqtSignal, Qt
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QDialog
 from PyQt4.QtGui import QLineEdit, QComboBox, QPushButton, QToolButton, QAction, QMenu
 from PyQt4.QtGui import QGridLayout, QSizePolicy, QIcon, QPrinter, QHeaderView, QProgressBar
+from PyQt4.QtGui import QPainter, QPixmap
 
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebFrame, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar
@@ -112,6 +114,10 @@ class Main(QMainWindow):
         self.fullscreenaction.setText("Toggle Fullscreen")
         self.fullscreenaction.setShortcut("F11")
         self.fullscreenaction.triggered.connect(self.fullscreenmode)
+        self.saveasimageaction = QAction(self)
+        self.saveasimageaction.setText("Save as JPG")
+        self.saveasimageaction.setShortcut("Ctrl+S")
+        self.saveasimageaction.triggered.connect(self.saveasimage)
         self.printaction = QAction(self)
         self.printaction.setText("Print")
         self.printaction.setShortcut("Ctrl+P")
@@ -132,6 +138,7 @@ class Main(QMainWindow):
         self.menu.addAction(self.zoominaction)
         self.menu.addAction(self.zoomoutaction)
         self.menu.addAction(self.fullscreenaction)
+        self.menu.addAction(self.saveasimageaction)
         self.menu.addAction(self.printaction)
         self.menu.addAction(self.quitaction)
 
@@ -183,7 +190,8 @@ class Main(QMainWindow):
         self.cancelfind.hide()
 
         self.pbar = QProgressBar() 
-        self.pbar.setMaximumWidth(120)
+        self.pbar.setMaximumWidth(480)
+        self.pbar.hide()
 
         self.web = MyWebView(loadProgress = self.pbar.setValue, loadFinished = self.pbar.hide, loadStarted = self.pbar.show, titleChanged = self.setWindowTitle) 
         self.web.setMinimumSize(1000,640)
@@ -221,7 +229,7 @@ class Main(QMainWindow):
     def Enter(self): 
         url = str(self.line.text())
         http = "http://" 
-        if "." not in url or " " in url: 
+        if ("://" not in url and "." not in url) or (" " in url): 
             url = "http://www.google.com/search?q="+url 
         elif url.startswith("file:///"):
             url = url[7:]
@@ -230,8 +238,9 @@ class Main(QMainWindow):
         self.GoTo(url)
     def GoTo(self, url):
         self.line.setText(url)
-        if url.startswith("http://"):
-            self.web.load(QUrl(url))
+        if url.startswith("http://") or url.startswith("https://"):
+            URL = QUrl(url)
+            self.web.load(URL)
         elif url.startswith("/"):
             main.web.load(QUrl.fromLocalFile(url))
         else:
@@ -273,6 +282,17 @@ class Main(QMainWindow):
             self.showNormal()
         else:
             self.showFullScreen()
+    def saveasimage(self):
+        viewportsize = self.web.page().viewportSize()
+        contentsize = self.web.page().mainFrame().contentsSize()
+        self.web.page().setViewportSize(contentsize)
+        img = QPixmap(contentsize)
+        painter = QPainter()
+        painter.begin(img)
+        self.web.page().mainFrame().render(painter, QWebFrame.AllLayers)
+        painter.end()
+        img.save("html.png")
+        self.web.page().setViewportSize(viewportsize)
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
         print_dialog = QPrintDialog(printer, self)
@@ -320,6 +340,6 @@ if __name__ == "__main__":
     main.show()
     if len(sys.argv)> 1:
         main.GoTo(sys.argv[1])
-    else:
-        main.GoTo("/usr/share/doc/python-qt4-doc/html/classes.html")
+#    else:
+#        main.GoTo("/usr/share/doc/python-qt4-doc/html/classes.html")
     sys.exit(app.exec_())
