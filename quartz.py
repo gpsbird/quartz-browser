@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.2.2
+version = 1.3
 Dependency = python-qt4
 Usage = A Light Weight Internet Browser
 Features = Unified Search/Url Bar
            Turn Javascript, Load Images on/off
            Find Text inside page
            Print Page
-           SAve page as JPG
-Last Update : confusion between search and goto fixed for UrlEdit Box.
+           Save page as JPG
+Last Update : Settings Dialog added.
+            Length of progress bar increased.
+            Fixed confusion between search and goto fixed for UrlEdit Box.
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -28,6 +30,7 @@ Last Update : confusion between search and goto fixed for UrlEdit Box.
 """
 
 import sys
+import configparser
 from os.path import abspath
 from subprocess import Popen
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt
@@ -35,21 +38,24 @@ from PyQt4.QtCore import QUrl, pyqtSignal, Qt
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QDialog
 from PyQt4.QtGui import QLineEdit, QComboBox, QPushButton, QToolButton, QAction, QMenu
 from PyQt4.QtGui import QGridLayout, QSizePolicy, QIcon, QPrinter, QHeaderView, QProgressBar
-from PyQt4.QtGui import QPainter, QPixmap
+from PyQt4.QtGui import QPainter, QPixmap, QFont
 
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebFrame, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar
 import common_files
+from settings_dialog import Ui_Dialog
 
-url = ""
 
 class MyWebPage(QWebPage):
     def __init__(self):
         QWebPage.__init__(self)
         self.setForwardUnsupportedContent(True)
-
+        self.useragent = "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1 Chrome/34.0.1847.116"
+#       TODO : Change Default User Agent, (this is in another place)
     def userAgentForUrl(self, url):
-        return "Nokia 5130"
+        return self.useragent
+    def setUserAgentForUrl(self, useragent):
+        self.useragent = useragent
 
 class MyWebView(QWebView):
     _windows = set()
@@ -78,29 +84,22 @@ class QurlEdit(QLineEdit):
 
 class Main(QMainWindow):
     def __init__(self): 
-        QMainWindow.__init__(self) 
+        QMainWindow.__init__(self)
+        try:
+            self.opensettings()
+        except:
+            self.defaultsettings()
         self.settings = QWebSettings.globalSettings()
-        self.settings.setFontFamily(QWebSettings.StandardFont, "DejaVu Sans")
-        self.settings.setFontFamily(QWebSettings.SansSerifFont, "DejaVu Sans")
-        self.settings.setFontFamily(QWebSettings.SerifFont, "DejaVu Serif")
-        self.settings.setFontFamily(QWebSettings.FixedFont, "Monospace")
-#        self.settings.setFontSize(QWebSettings.DefaultFontSize, 14)
         self.settings.setMaximumPagesInCache(6)
-        self.settings.setFontSize(QWebSettings.MinimumFontSize, 12)
-        self.settings.setAttribute(QWebSettings.JavascriptEnabled, False)
-#        self.settings.setAttribute(QWebSettings.ZoomTextOnly, True)
-#        self.settings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
         self.initUI()
     def initUI(self):
         self.loadimagesaction = QAction(self)
         self.loadimagesaction.setText("Load Images")
         self.loadimagesaction.setCheckable(True)
-        self.loadimagesaction.setChecked(True)
         self.loadimagesaction.triggered.connect(self.loadimages)
         self.javascriptmode = QAction(self)
         self.javascriptmode.setText("Enable Javascript")
         self.javascriptmode.setCheckable(True)
-#        self.javascriptmode.setChecked(True)
         self.javascriptmode.triggered.connect(self.setjavascript)
         self.zoominaction = QAction(self)
         self.zoominaction.setText("Zoom  In")
@@ -114,8 +113,12 @@ class Main(QMainWindow):
         self.fullscreenaction.setText("Toggle Fullscreen")
         self.fullscreenaction.setShortcut("F11")
         self.fullscreenaction.triggered.connect(self.fullscreenmode)
+        self.settingsaction = QAction(self)
+        self.settingsaction.setText("Settings")
+#        self.settingsaction.setShortcut("Ctrl+")
+        self.settingsaction.triggered.connect(self.settingstweek)
         self.saveasimageaction = QAction(self)
-        self.saveasimageaction.setText("Save as JPG")
+        self.saveasimageaction.setText("Save as Image")
         self.saveasimageaction.setShortcut("Ctrl+S")
         self.saveasimageaction.triggered.connect(self.saveasimage)
         self.printaction = QAction(self)
@@ -138,6 +141,7 @@ class Main(QMainWindow):
         self.menu.addAction(self.zoominaction)
         self.menu.addAction(self.zoomoutaction)
         self.menu.addAction(self.fullscreenaction)
+        self.menu.addAction(self.settingsaction)
         self.menu.addAction(self.saveasimageaction)
         self.menu.addAction(self.printaction)
         self.menu.addAction(self.quitaction)
@@ -152,7 +156,6 @@ class Main(QMainWindow):
         self.setCentralWidget(self.centralwidget)
 
         self.line = QurlEdit(self) 
-#        self.line.setMinimumSize(800,26) 
         self.line.setStyleSheet("font-size:15px;")
         self.line.returnPressed.connect(self.Enter)
         self.reload = QPushButton(QIcon(":/view-refresh.png"), "",self) 
@@ -195,6 +198,7 @@ class Main(QMainWindow):
 
         self.web = MyWebView(loadProgress = self.pbar.setValue, loadFinished = self.pbar.hide, loadStarted = self.pbar.show, titleChanged = self.setWindowTitle) 
         self.web.setMinimumSize(1000,640)
+        self.applysettings()
 #       
         self.web.urlChanged.connect(self.UrlChanged)
         self.web.loadStarted.connect(self.startedloading) 
@@ -331,8 +335,141 @@ class Main(QMainWindow):
         self.web.setTextSizeMultiplier(zoomlevel-0.1)
     def loadimages(self, state):
         self.settings.setAttribute(QWebSettings.AutoLoadImages, state)
+        if state:
+            self.loadimagesval = True
+        else:
+            self.loadimagesval = False
+        self.savesettings()
     def setjavascript(self, state):
         self.settings.setAttribute(QWebSettings.JavascriptEnabled, state)
+        if state:
+            self.javascriptenabledval = True
+        else:
+            self.javascriptenabledval = False
+        self.savesettings()
+
+######### Settings Portion ##########
+    def settingstweek(self):
+        self.dialog = QDialog(self)
+        self.settingsdialog = Ui_Dialog()
+        self.settingsdialog.setupUi(self.dialog)
+        if self.loadimagesval:
+            self.settingsdialog.checkLoadImages.setChecked(True)
+        if self.javascriptenabledval:
+            self.settingsdialog.checkJavascript.setChecked(True)
+        if self.customuseragentval :
+            self.settingsdialog.checkUserAgent.setChecked(True)
+        self.settingsdialog.useragentEdit.setText(self.useragentval)
+        if self.customhomepageurlval:
+            self.settingsdialog.checkHomePage.setChecked(True)
+        self.settingsdialog.homepageEdit.setText(self.homepageurlval)
+        self.settingsdialog.spinFontSize.setValue(self.minfontsizeval)
+        self.settingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
+        self.settingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
+        self.settingsdialog.seriffontCombo.setCurrentFont(QFont(self.seriffontval))
+        self.settingsdialog.fixedfontCombo.setCurrentFont(QFont(self.fixedfontval))
+        self.dialog.accepted.connect(self.changesettings)
+        self.dialog.show()
+    def changesettings(self):
+        if self.settingsdialog.checkLoadImages.isChecked():
+            self.loadimagesval = True
+        else:
+            self.loadimagesval = False
+        if self.settingsdialog.checkJavascript.isChecked():
+            self.javascriptenabledval = True
+        else:
+            self.javascriptenabledval = False
+        if self.settingsdialog.checkUserAgent.isChecked():
+            self.customuseragentval = True
+        else:
+            self.customuseragentval = False
+        self.useragentval = self.settingsdialog.useragentEdit.text()
+        if self.settingsdialog.checkHomePage.isChecked():
+            self.customhomepageurlval = True
+        else:
+            self.customhomepageurlval = False
+        self.homepageurlval = self.settingsdialog.homepageEdit.text()
+        self.minfontsizeval = self.settingsdialog.spinFontSize.value()
+        self.standardfontval = self.settingsdialog.standardfontCombo.currentText()
+        self.sansfontval = self.settingsdialog.sansfontCombo.currentText()
+        self.seriffontval = self.settingsdialog.seriffontCombo.currentText()
+        self.fixedfontval = self.settingsdialog.fixedfontCombo.currentText()
+        self.applysettings()
+        self.savesettings()
+    def defaultsettings(self):
+        self.loadimagesval = True
+        self.javascriptenabledval = True
+        self.customuseragentval = False
+        self.useragentval = "Nokia 5130"
+        self.customhomepageurlval = False
+        self.homepageurlval = "/usr/share/doc/python-qt4-doc/html/classes.html"
+        self.minfontsizeval = 12
+        self.standardfontval = "Sans"
+        self.sansfontval = "Sans"
+        self.seriffontval = "Serif"
+        self.fixedfontval = "Monospace"
+    def opensettings(self):
+        Config = configparser.ConfigParser()
+        Config.read("settings.ini")
+        self.loadimagesval = Config.getboolean('Browsing', 'LoadImages')
+        self.javascriptenabledval = Config.getboolean('Browsing', 'JavaScriptEnabled')
+        self.customuseragentval = Config.getboolean('Browsing', 'CustomUserAgent')
+        self.useragentval = Config.get('Browsing', 'UserAgent')
+        self.customhomepageurlval = Config.getboolean('HomePage', 'CustomHomePageUrl')
+        self.homepageurlval = Config.get('HomePage', 'HomePageUrl')
+        self.minfontsizeval = Config.getint('Appearance', 'MinFontSize')
+        self.standardfontval = Config.get('Appearance', 'StandardFont')
+        self.sansfontval = Config.get('Appearance', 'SansFont')
+        self.seriffontval = Config.get('Appearance', 'SerifFont')
+        self.fixedfontval = Config.get('Appearance', 'FixedFont')
+    def savesettings(self):
+        Config = configparser.ConfigParser()
+        Config.add_section('Browsing')
+        Config.set('Browsing', 'LoadImages', str(self.loadimagesval))
+        Config.set('Browsing', 'JavaScriptEnabled', str(self.javascriptenabledval))
+        Config.set('Browsing', 'CustomUserAgent', str(self.customuseragentval))
+        Config.set('Browsing', 'UserAgent', str(self.useragentval))
+        Config.add_section('HomePage')
+        Config.set('HomePage', 'CustomHomePageUrl', str(self.customhomepageurlval))
+        Config.set('HomePage', 'HomePageUrl', str(self.homepageurlval))
+        Config.add_section('Appearance')
+        Config.set('Appearance', 'MinFontSize', str(self.minfontsizeval))
+        Config.set('Appearance', 'StandardFont', str(self.standardfontval))
+        Config.set('Appearance', 'SansFont', str(self.sansfontval))
+        Config.set('Appearance', 'SerifFont', str(self.seriffontval))
+        Config.set('Appearance', 'FixedFont', str(self.fixedfontval))
+        cfgfile = open("settings.ini", 'w')
+        Config.write(cfgfile)
+        cfgfile.close()
+    def applysettings(self):
+        if self.customuseragentval == True:
+            self.web.page().setUserAgentForUrl(self.useragentval)
+        else:
+            self.web.page().setUserAgentForUrl("Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1 Chrome/34.0.1847.116")
+        if self.customhomepageurlval:
+            self.homepageurl = self.homepageurlval
+        else:
+            self.homepageurl = "http://www.google.com"
+        self.settings.setAttribute(QWebSettings.AutoLoadImages, self.loadimagesval)
+        if self.loadimagesval:
+            self.loadimagesaction.setChecked(True)
+        else:
+            self.loadimagesaction.setChecked(False)
+        self.settings.setAttribute(QWebSettings.JavascriptEnabled, self.javascriptenabledval)
+        if self.javascriptenabledval:
+            self.javascriptmode.setChecked(True)
+        else:
+            self.javascriptmode.setChecked(False)
+        self.settings.setFontSize(QWebSettings.MinimumFontSize, self.minfontsizeval)
+        self.settings.setFontFamily(QWebSettings.StandardFont, self.standardfontval)
+        self.settings.setFontFamily(QWebSettings.SansSerifFont, self.sansfontval)
+        self.settings.setFontFamily(QWebSettings.SerifFont, self.seriffontval)
+        self.settings.setFontFamily(QWebSettings.FixedFont, self.fixedfontval)
+#        self.settings.setFontSize(QWebSettings.DefaultFontSize, 14)
+#        self.settings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
+
+
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -340,6 +477,6 @@ if __name__ == "__main__":
     main.show()
     if len(sys.argv)> 1:
         main.GoTo(sys.argv[1])
-#    else:
-#        main.GoTo("/usr/share/doc/python-qt4-doc/html/classes.html")
+    else:
+        main.GoTo(main.homepageurl)
     sys.exit(app.exec_())
