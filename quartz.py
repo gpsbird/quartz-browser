@@ -32,6 +32,7 @@ Last Update : Settings Dialog added.
 import sys
 import configparser
 from os.path import abspath
+from os import environ
 from subprocess import Popen
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt
 
@@ -45,6 +46,7 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar
 import common_files
 from settings_dialog import Ui_Dialog
 
+userhomedir = environ['HOME']
 
 class MyWebPage(QWebPage):
     def __init__(self):
@@ -295,7 +297,7 @@ class Main(QMainWindow):
         painter.begin(img)
         self.web.page().mainFrame().render(painter, QWebFrame.AllLayers)
         painter.end()
-        img.save("html.png")
+        img.save(userhomedir+"/html_page_quartz.png")
         self.web.page().setViewportSize(viewportsize)
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
@@ -410,7 +412,7 @@ class Main(QMainWindow):
         self.fixedfontval = "Monospace"
     def opensettings(self):
         Config = configparser.ConfigParser()
-        Config.read("settings.ini")
+        Config.read(userhomedir + "/.config/quartz_settings.ini")
         self.loadimagesval = Config.getboolean('Browsing', 'LoadImages')
         self.javascriptenabledval = Config.getboolean('Browsing', 'JavaScriptEnabled')
         self.customuseragentval = Config.getboolean('Browsing', 'CustomUserAgent')
@@ -438,7 +440,7 @@ class Main(QMainWindow):
         Config.set('Appearance', 'SansFont', str(self.sansfontval))
         Config.set('Appearance', 'SerifFont', str(self.seriffontval))
         Config.set('Appearance', 'FixedFont', str(self.fixedfontval))
-        cfgfile = open("settings.ini", 'w')
+        cfgfile = open(userhomedir + "/.config/quartz_settings.ini", 'w')
         Config.write(cfgfile)
         cfgfile.close()
     def applysettings(self):
