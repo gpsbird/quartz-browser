@@ -6,7 +6,7 @@ Version = 1.3
 ### Description
 Dependency = python2.7, python-qt4, python-configparser  
 Usage = quartz.py URL  
-$quartz.py http://www.google.com  
+$ quartz.py http://www.google.com  
 ##### Features :  
  1. Unified Search/Url Bar  
  2. Turn Javascript, Load Images on/off  
