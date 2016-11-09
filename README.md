@@ -12,6 +12,7 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
 
 **Usage** = quartz.py URL  
  $ *quartz.py http://www.google.com*  
+ 
 #### Features :  
  1. Unified Search/Url Bar  
  2. Turn Javascript, Load Images on/off  
@@ -26,4 +27,3 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
  3. open terminal in that folder  
  4. Change permissions of install.sh and make it executable.
  5. run sudo ./install.sh
-### Screenshots
