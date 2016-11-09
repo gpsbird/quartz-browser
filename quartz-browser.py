@@ -10,6 +10,7 @@ Features = Unified Search/Url Bar
            Print Page
            Save page as JPG
 Last Update : 
+            History Viewer added (but is not saved)
             Bookmarking feature added
             Settings dialog title changed.
             Settings Dialog added.
@@ -40,10 +41,11 @@ import configparser
 from os.path import abspath, exists
 from os import environ, mkdir
 from subprocess import Popen
+from time import strftime
 
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSize
 
-from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QDialog, QStringListModel, QListView
+from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
 from PyQt4.QtGui import QGridLayout, QSizePolicy, QIcon, QPrinter, QHeaderView, QProgressBar
 from PyQt4.QtGui import QPainter, QPixmap, QFont
@@ -53,8 +55,7 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar
 
 import quartz_common
 from settings_dialog import Ui_Dialog
-from bookmarks_dialog import BookmarksTable, Bookmarks_Dialog, Add_Bookmark_Dialog
-#from add_bookmark import Add_Bookmark_Dialog
+from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
 from bookmarkparser import parsebookmarks, writebookmarks
 
 userhomedir = environ['HOME']
@@ -204,6 +205,9 @@ class Main(QMainWindow):
         self.bookmarkBtn = QPushButton(QIcon(":/bookmarks.png"), "", self)
         self.bookmarkBtn.setToolTip("Manage Bookmarks")
         self.bookmarkBtn.clicked.connect(self.managebookmarks)
+        self.historyBtn = QPushButton(QIcon(":/history.png"), "", self)
+        self.historyBtn.setToolTip("View History")
+        self.historyBtn.clicked.connect(self.viewhistory)
 
         self.findBtn = QPushButton(QIcon(":/search.png"), "", self)
         self.findBtn.setToolTip("Find Text in \n This Page")
@@ -259,8 +263,9 @@ class Main(QMainWindow):
         grid.addWidget(self.addbookmarkBtn,0,7, 1, 1) 
         grid.addWidget(self.menuBtn,0,8, 1, 1) 
         grid.addWidget(self.bookmarkBtn,0,9, 1, 1) 
-        grid.addWidget(self.findBtn,0,10, 1, 1) 
-        grid.addWidget(self.web, 2, 0, 1, 11)
+        grid.addWidget(self.historyBtn,0,10, 1, 1) 
+        grid.addWidget(self.findBtn,0,11, 1, 1) 
+        grid.addWidget(self.web, 2, 0, 1, 12)
 #---------Window settings --------------------------------
         self.setWindowTitle("PySurf") 
         self.setWindowIcon(QIcon("")) 
@@ -296,9 +301,10 @@ class Main(QMainWindow):
     def UrlChanged(self):
         url =  self.web.url().toString()
         self.line.setText(url)
-        if url in self.history:
-            self.history.remove(url)
-        self.history.insert(0, url)
+        for item in self.history:  # Removes the old item, inserts new
+            if url in item[1]:
+                self.history.remove(item)
+        self.history.insert(0, [strftime("%b %d, %H:%M"),url])
     def LinkHovered(self,l): 
         self.status.showMessage(l)
     def startedloading(self):
@@ -309,36 +315,37 @@ class Main(QMainWindow):
             self.status.showMessage("Error  : Problem Occured in loading Page !")
         self.reload.setIcon(QIcon(":/view-refresh.png"))
         self.loading = False
+    def download_file(self, networkrequest):
+        url = str(networkrequest.url().toString())
+        Popen(["uget-gtk", url])
+
     def urlsuggestions(self, text):
         suggestions = []
-        for url in self.history:
-            if text in url:
-                suggestions.insert(0, url)
-        for [title, address] in self.bookmarks:
-            if str(text) in address:
-                suggestions.insert(0, address)
         if self.findmodeon == False:
-            self.listmodel.setStringList( QStringList(suggestions) )
-        else:
-            self.listmodel.setStringList( QStringList([]) )
+            for [time, url] in self.history:
+                if text in url:
+                    suggestions.insert(0, url)
+            for [title, address] in self.bookmarks:
+                if str(text) in address:
+                    suggestions.insert(0, address)
+        self.listmodel.setStringList( QStringList(suggestions) )
 
 
-    def fullscreenmode(self):
-        if self.isFullScreen():
-            self.showNormal()
-        else:
-            self.showFullScreen()
     def saveasimage(self):
-        viewportsize = self.web.page().viewportSize()
-        contentsize = self.web.page().mainFrame().contentsSize()
-        self.web.page().setViewportSize(contentsize)
-        img = QPixmap(contentsize)
-        painter = QPainter()
-        painter.begin(img)
-        self.web.page().mainFrame().render(painter, QWebFrame.AllLayers)
-        painter.end()
-        img.save(userhomedir+"/html_page_quartz.png")
-        self.web.page().setViewportSize(viewportsize)
+        filename = QFileDialog.getSaveFileName(self,
+                                      "Select Image to Save", userhomedir+"/"+strftime("%Y%m%d-%H%M%S")+".png",
+                                      "PNG Image (*.png)" )
+        if not filename.isEmpty():
+            viewportsize = self.web.page().viewportSize()
+            contentsize = self.web.page().mainFrame().contentsSize()
+            self.web.page().setViewportSize(contentsize)
+            img = QPixmap(contentsize)
+            painter = QPainter()
+            painter.begin(img)
+            self.web.page().mainFrame().render(painter, QWebFrame.AllLayers)
+            painter.end()
+            img.save(filename)
+            self.web.page().setViewportSize(viewportsize)
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
         printer.setOutputFileName(userhomedir + "/Documents/" + self.windowTitle() + ".pdf")
@@ -369,6 +376,12 @@ class Main(QMainWindow):
             writebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt", self.bookmarks)
         else:
             self.bookmarks = parsebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt")
+    def viewhistory(self):
+        dialog = QDialog(self)
+        history_dialog = History_Dialog()
+        history_dialog.setupUi(dialog, self.history)
+        history_dialog.tableView.doubleclicked.connect(self.GoTo)
+        dialog.show()
 
     def findmode(self):
         self.findmodeon = True
@@ -392,15 +405,18 @@ class Main(QMainWindow):
         text = self.line.text()
         self.web.findText(text, QWebPage.FindBackward)
 
-    def download_file(self, networkrequest):
-        url = str(networkrequest.url().toString())
-        Popen(["uget-gtk", url])
     def zoomin(self):
         zoomlevel = self.web.textSizeMultiplier()
         self.web.setTextSizeMultiplier(zoomlevel+0.1) # Use setZoomFactor() to zoom text and images
     def zoomout(self):
         zoomlevel = self.web.textSizeMultiplier()
         self.web.setTextSizeMultiplier(zoomlevel-0.1)
+    def fullscreenmode(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
     def loadimages(self, state):
         self.settings.setAttribute(QWebSettings.AutoLoadImages, state)
         if state:
