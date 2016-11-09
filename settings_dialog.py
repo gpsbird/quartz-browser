@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/pi/Desktop/Linux/Programming/Python/quartz-settings.ui'
+# Form implementation generated from reading ui file 'quartz-settings.ui'
 #
-# Created: Wed Nov  2 18:02:08 2016
+# Created: Fri Nov  4 09:49:03 2016
 #      by: PyQt4 UI code generator 4.11.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -113,7 +113,7 @@ class Ui_Dialog(object):
         QtCore.QMetaObject.connectSlotsByName(Dialog)
 
     def retranslateUi(self, Dialog):
-        Dialog.setWindowTitle(_translate("Dialog", "Dialog", None))
+        Dialog.setWindowTitle(_translate("Dialog", "Settings", None))
         self.groupBox.setTitle(_translate("Dialog", "Browsing", None))
         self.checkLoadImages.setText(_translate("Dialog", "Load Images", None))
         self.checkJavascript.setText(_translate("Dialog", "Enable JavaScript", None))
