@@ -33,7 +33,7 @@ class BookmarksTable(QtGui.QTableWidget):
         self.setHorizontalHeaderLabels(["Title", "Address"])
         self.horizontalHeader().setDefaultSectionSize(240)
         self.horizontalHeader().setResizeMode(1, QtGui.QHeaderView.Stretch)
-        self.data = bookmark_list
+        self.data = bookmark_list[:]
         self.setmydata()
     def setmydata(self):
         for m, row in enumerate (self.data):

@@ -1,21 +1,18 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.4
-Dependency = python-qt4, python-configparser
+version = 1.4.3
+Dependency = python-qt4, uget-gtk
 Usage = A Light Weight Internet Browser
-Features = Unified Search/Url Bar
+Features = Unified Google_Search & Url Bar
            Turn Javascript, Load Images on/off
            Find Text inside page
            Print Page
-           Save page as JPG
+           Save page as JPG, html
 Last Update : 
-            History Viewer added (but is not saved)
-            Bookmarking feature added
-            Settings dialog title changed.
-            Settings Dialog added.
-            Length of progress bar increased.
-            Fixed confusion between search and goto fixed for UrlEdit Box.
+            Save as HTML added.
+            Dependency on python-configparser has been removed.
+            Now cookies are saved.
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -32,35 +29,49 @@ Last Update :
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-# TODO : Save Cookies to disk
-#        View History Dialog
-#        Auto complete username password
+# TODO : Auto complete username password
+#        remove Some menu items
+#        Use of internal download manager
 
 import sys
-import configparser
 from os.path import abspath, exists
 from os import environ, mkdir
 from subprocess import Popen
 from time import strftime
 
-from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSize
+from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings
+from PyQt4.QtCore import QFileInfo, QByteArray
 
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
-from PyQt4.QtGui import QGridLayout, QSizePolicy, QIcon, QPrinter, QHeaderView, QProgressBar
+from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QHeaderView, QProgressBar
 from PyQt4.QtGui import QPainter, QPixmap, QFont
 
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebFrame, QWebSettings
-from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar
+from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCookie, QNetworkRequest
 
-import quartz_common
 from settings_dialog import Ui_Dialog
 from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
 from bookmarkparser import parsebookmarks, writebookmarks
+from download_manager import DownloadManager
+import quartz_common
+
 
 userhomedir = environ['HOME']
+configdir = userhomedir+"/.config/quartz-browser/"
+
+class MyCookieJar(QNetworkCookieJar):
+    """ Reimplemented QNetworkCookieJar to get cookie import/export feature"""
+    def __init__(self, parent=None):
+        super(MyCookieJar, self).__init__(parent)
+        self.window = parent
+        cookiesValue = self.window.settings.value("cookies").toByteArray()
+        if cookiesValue:
+            cookiesList = QNetworkCookie.parseCookies(cookiesValue)
+            self.setAllCookies(cookiesList)
 
 class MyWebPage(QWebPage):
+    """Reimplemented QWebPage to get User Agent Changing facility"""
     def __init__(self):
         QWebPage.__init__(self)
         self.setForwardUnsupportedContent(True)
@@ -71,11 +82,13 @@ class MyWebPage(QWebPage):
         self.useragent = useragent
 
 class MyWebView(QWebView):
-    _windows = set()
+#    _windows = set()
     def __init__(self, **kargs):
         QWebView.__init__(self, **kargs)
         self.setPage(MyWebPage())
     def createWindow(self, windowtype):
+        """This function is internally called when new window is requested.
+           This will must return an window object"""
         return self
 #        window = self.newWindow()
 #        window.show()
@@ -87,6 +100,7 @@ class MyWebView(QWebView):
 #        return window
 
 class QurlEdit(QLineEdit):
+    """ Reimplemented QLineEdit to get all selected when double clicked"""
 #    mouseDoubleClicked = pyqtSignal()
     def __init__(self, parent=None):
         super(QurlEdit, self).__init__(parent)
@@ -98,21 +112,28 @@ class QurlEdit(QLineEdit):
 class Main(QMainWindow):
     def __init__(self): 
         QMainWindow.__init__(self)
-        if not exists(userhomedir + "/.config/quartz-browser"):
-            mkdir(userhomedir + "/.config/quartz-browser")
-        try:
-            self.opensettings(userhomedir + "/.config/quartz-browser/settings.ini")
-        except:
+        if not exists(configdir):
+            mkdir(configdir)
+        # Import Settings
+        self.settings = QSettings("quartz-browser","quartz")
+        haveallsettings = True
+        for key in ['LoadImages', 'JavaScriptEnabled', 'CustomUserAgent', 'UserAgent', 'CustomHomePageUrl', 'HomePageUrl',
+                    'MinFontSize', 'StandardFont', 'SansFont', 'SerifFont', 'FixedFont']:
+            haveallsettings = haveallsettings and self.settings.contains(key)
+        if haveallsettings:
+            self.opensettings()
+        else:
             self.defaultsettings()
-#        if not exists(userhomedir + "/.cache/quartz-browser"):
-#            mkdir(userhomedir + "/.cache/quartz-browser")
-        self.settings = QWebSettings.globalSettings()
-        self.settings.setMaximumPagesInCache(10)
+        self.websettings = QWebSettings.globalSettings()
+        self.websettings.setMaximumPagesInCache(10)
+        self.websettings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
         self.history = []
-        self.bookmarks = parsebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt")
+        self.bookmarks = parsebookmarks(configdir+"bookmarks.txt")
         self.findmodeon = False
         self.initUI()
+
     def initUI(self):
+###############################  Create Menu and Actions ##############################
         self.loadimagesaction = QAction(self)
         self.loadimagesaction.setText("Load Images")
         self.loadimagesaction.setCheckable(True)
@@ -133,43 +154,43 @@ class Main(QMainWindow):
         self.fullscreenaction.setText("Toggle Fullscreen")
         self.fullscreenaction.setShortcut("F11")
         self.fullscreenaction.triggered.connect(self.fullscreenmode)
-        self.settingsaction = QAction(self)
-        self.settingsaction.setText("Settings")
-        self.settingsaction.setShortcut("Ctrl+,")
-        self.settingsaction.triggered.connect(self.settingstweek)
+        self.websettingsaction = QAction(self)
+        self.websettingsaction.setText("Settings")
+        self.websettingsaction.setShortcut("Ctrl+,")
+        self.websettingsaction.triggered.connect(self.settingseditor)
         self.saveasimageaction = QAction(self)
         self.saveasimageaction.setText("Save as Image")
-        self.saveasimageaction.setShortcut("Ctrl+S")
+        self.saveasimageaction.setShortcut("Ctrl+Shift+S")
         self.saveasimageaction.triggered.connect(self.saveasimage)
+        self.saveashtmlaction = QAction(self)
+        self.saveashtmlaction.setText("Save as Html")
+        self.saveashtmlaction.setShortcut("Ctrl+S")
+        self.saveashtmlaction.triggered.connect(self.saveashtml)
         self.printaction = QAction(self)
         self.printaction.setText("Print")
         self.printaction.setShortcut("Ctrl+P")
         self.printaction.triggered.connect(self.printpage)
-        self.findaction = QAction(self)
-        self.findaction.setText("Find Text")
-        self.findaction.setShortcut("Ctrl+F")
-        self.findaction.triggered.connect(self.findmode)
         self.quitaction = QAction(self)
         self.quitaction.setText("Quit")
         self.quitaction.setShortcut("Ctrl+Q")
         self.quitaction.triggered.connect(self.close)
 
         self.menu = QMenu(self)
-        self.menu.addAction(self.findaction)
-        self.menu.addAction(self.javascriptmode)
         self.menu.addAction(self.loadimagesaction)
+        self.menu.addAction(self.javascriptmode)
+        self.menu.addAction(self.websettingsaction)
         self.menu.addSeparator()
         self.menu.addAction(self.zoominaction)
         self.menu.addAction(self.zoomoutaction)
         self.menu.addAction(self.fullscreenaction)
         self.menu.addSeparator()
-        self.menu.addAction(self.settingsaction)
         self.menu.addAction(self.saveasimageaction)
+        self.menu.addAction(self.saveashtmlaction)
         self.menu.addAction(self.printaction)
         self.menu.addAction(self.quitaction)
 
 
-#       Create Gui Part
+###############################  Create Gui Parts ##############################
         grid = QGridLayout()
         grid.setSpacing(2)
         grid.setContentsMargins(2,2,2,2)
@@ -211,6 +232,7 @@ class Main(QMainWindow):
 
         self.findBtn = QPushButton(QIcon(":/search.png"), "", self)
         self.findBtn.setToolTip("Find Text in \n This Page")
+        self.findBtn.setShortcut("Ctrl+F")
         self.findBtn.clicked.connect(self.findmode)
         self.find = QPushButton(self)
         self.find.setText("Find/Next")
@@ -229,7 +251,7 @@ class Main(QMainWindow):
         self.completer.setCompletionMode(1)
         self.listmodel = QStringListModel(self)
         self.completer.setModel(self.listmodel)
-        self.completer.setMaxVisibleItems(6)
+        self.completer.setMaxVisibleItems(10)
         self.line.setCompleter(self.completer)
 
         self.pbar = QProgressBar() 
@@ -245,10 +267,10 @@ class Main(QMainWindow):
         self.web.loadFinished.connect(self.finishedloading) 
         self.web.page().linkHovered.connect(self.LinkHovered)
         self.web.page().printRequested.connect(self.printpage)
-        self.web.page().downloadRequested.connect(self.download_file)
+        self.web.page().downloadRequested.connect(self.download_requested_file)
         self.web.page().unsupportedContent.connect(self.download_file)
 
-        self.cookiejar = QNetworkCookieJar()
+        self.cookiejar = MyCookieJar(self)
         self.networkmanager = QNetworkAccessManager()
         self.networkmanager.setCookieJar(self.cookiejar)
         self.web.page().setNetworkAccessManager(self.networkmanager)
@@ -267,8 +289,7 @@ class Main(QMainWindow):
         grid.addWidget(self.findBtn,0,11, 1, 1) 
         grid.addWidget(self.web, 2, 0, 1, 12)
 #---------Window settings --------------------------------
-        self.setWindowTitle("PySurf") 
-        self.setWindowIcon(QIcon("")) 
+        self.setWindowIcon(QIcon(":/view-refresh.png")) 
         self.setStyleSheet("background-color:") 
         self.status = self.statusBar()
         self.status.setMaximumHeight(18)
@@ -301,7 +322,7 @@ class Main(QMainWindow):
     def UrlChanged(self):
         url =  self.web.url().toString()
         self.line.setText(url)
-        for item in self.history:  # Removes the old item, inserts new
+        for item in self.history:  # Removes the old item, inserts new same item on the top
             if url in item[1]:
                 self.history.remove(item)
         self.history.insert(0, [strftime("%b %d, %H:%M"),url])
@@ -309,7 +330,7 @@ class Main(QMainWindow):
         self.status.showMessage(l)
     def startedloading(self):
         self.reload.setIcon(QIcon(":/process-stop.png"))
-        self.loading = True
+        self.loading = True   # Required for reload button
     def finishedloading(self, ok):
         if not ok:
             self.status.showMessage("Error  : Problem Occured in loading Page !")
@@ -318,8 +339,17 @@ class Main(QMainWindow):
     def download_file(self, networkrequest):
         url = str(networkrequest.url().toString())
         Popen(["uget-gtk", url])
+    def download_requested_file(self, networkrequest):
+        filename = QFileInfo(networkrequest.url().path()).fileName()
+        filepath = QFileDialog.getSaveFileName(self,
+                                      "Enter FileName to Save", "/home/pi/Downloads/"+str(filename),
+                                      "All Files (*)" )
+        if not filepath.isEmpty():
+            self.newdownload = DownloadManager(self.networkmanager)
+            self.newdownload.download(networkrequest, filepath)
 
     def urlsuggestions(self, text):
+        """ Creates the list of url suggestions for URL box """
         suggestions = []
         if self.findmodeon == False:
             for [time, url] in self.history:
@@ -333,7 +363,7 @@ class Main(QMainWindow):
 
     def saveasimage(self):
         filename = QFileDialog.getSaveFileName(self,
-                                      "Select Image to Save", userhomedir+"/"+strftime("%Y%m%d-%H%M%S")+".png",
+                                      "Select Image to Save", userhomedir + "/Documents/" + self.web.page().mainFrame().title() +".png",
                                       "PNG Image (*.png)" )
         if not filename.isEmpty():
             viewportsize = self.web.page().viewportSize()
@@ -346,9 +376,18 @@ class Main(QMainWindow):
             painter.end()
             img.save(filename)
             self.web.page().setViewportSize(viewportsize)
+    def saveashtml(self):
+        html = self.web.page().mainFrame().toHtml()
+        filename = QFileDialog.getSaveFileName(self,
+                                      "Enter HTML File Name", userhomedir + "/Documents/" + self.web.page().mainFrame().title()+".html",
+                                      "HTML Document (*.html)" )
+        if not filename.isEmpty():
+            htmlfile = open(filename, 'w')
+            htmlfile.write(html)
+            htmlfile.close()
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
-        printer.setOutputFileName(userhomedir + "/Documents/" + self.windowTitle() + ".pdf")
+        printer.setOutputFileName(userhomedir + "/Documents/" + self.web.page().mainFrame().title() + ".pdf")
         print_dialog = QPrintDialog(printer, self)
         if print_dialog.exec_() == QDialog.Accepted:
           if page != 0:
@@ -364,7 +403,6 @@ class Main(QMainWindow):
         addbmkdialog.addressEdit.setText(self.line.text())
         if (dialog.exec_() == QDialog.Accepted):
             self.bookmarks.insert(0, [str(addbmkdialog.titleEdit.text()), str(addbmkdialog.addressEdit.text())])
-            writebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt", self.bookmarks)
             self.status.showMessage("Bookmark has been Saved")
     def managebookmarks(self):
         dialog = QDialog(self)
@@ -373,9 +411,6 @@ class Main(QMainWindow):
         bmk_dialog.tableView.doubleclicked.connect(self.GoTo)
         if (dialog.exec_() == QDialog.Accepted):
             self.bookmarks = bmk_dialog.tableView.data
-            writebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt", self.bookmarks)
-        else:
-            self.bookmarks = parsebookmarks(userhomedir + "/.config/quartz-browser/bookmarks.txt")
     def viewhistory(self):
         dialog = QDialog(self)
         history_dialog = History_Dialog()
@@ -405,6 +440,7 @@ class Main(QMainWindow):
         text = self.line.text()
         self.web.findText(text, QWebPage.FindBackward)
 
+#####################  View Settings  ###################
     def zoomin(self):
         zoomlevel = self.web.textSizeMultiplier()
         self.web.setTextSizeMultiplier(zoomlevel+0.1) # Use setZoomFactor() to zoom text and images
@@ -418,69 +454,67 @@ class Main(QMainWindow):
             self.showFullScreen()
 
     def loadimages(self, state):
-        self.settings.setAttribute(QWebSettings.AutoLoadImages, state)
+        self.websettings.setAttribute(QWebSettings.AutoLoadImages, state)
         if state:
             self.loadimagesval = True
         else:
             self.loadimagesval = False
-        self.savesettings()
     def setjavascript(self, state):
-        self.settings.setAttribute(QWebSettings.JavascriptEnabled, state)
+        self.websettings.setAttribute(QWebSettings.JavascriptEnabled, state)
         if state:
             self.javascriptenabledval = True
         else:
             self.javascriptenabledval = False
-        self.savesettings()
 
-######### Settings Portion ##########
-    def settingstweek(self):  # Opens the settings manager dialog
-        self.dialog = QDialog(self)
-        self.settingsdialog = Ui_Dialog()
-        self.settingsdialog.setupUi(self.dialog)
+########################## Settings Portion #########################
+    def settingseditor(self):  
+        """ Opens the settings manager dialog, then applies the change"""
+        dialog = QDialog(self)
+        websettingsdialog = Ui_Dialog()
+        websettingsdialog.setupUi(dialog)
         if self.loadimagesval:
-            self.settingsdialog.checkLoadImages.setChecked(True)
+            websettingsdialog.checkLoadImages.setChecked(True)
         if self.javascriptenabledval:
-            self.settingsdialog.checkJavascript.setChecked(True)
+            websettingsdialog.checkJavascript.setChecked(True)
         if self.customuseragentval :
-            self.settingsdialog.checkUserAgent.setChecked(True)
-        self.settingsdialog.useragentEdit.setText(self.useragentval)
+            websettingsdialog.checkUserAgent.setChecked(True)
+        websettingsdialog.useragentEdit.setText(self.useragentval)
         if self.customhomepageurlval:
-            self.settingsdialog.checkHomePage.setChecked(True)
-        self.settingsdialog.homepageEdit.setText(self.homepageurlval)
-        self.settingsdialog.spinFontSize.setValue(self.minfontsizeval)
-        self.settingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
-        self.settingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
-        self.settingsdialog.seriffontCombo.setCurrentFont(QFont(self.seriffontval))
-        self.settingsdialog.fixedfontCombo.setCurrentFont(QFont(self.fixedfontval))
-        self.dialog.accepted.connect(self.changesettings)
-        self.dialog.show()
-    def changesettings(self):
-        if self.settingsdialog.checkLoadImages.isChecked():
-            self.loadimagesval = True
-        else:
-            self.loadimagesval = False
-        if self.settingsdialog.checkJavascript.isChecked():
-            self.javascriptenabledval = True
-        else:
-            self.javascriptenabledval = False
-        if self.settingsdialog.checkUserAgent.isChecked():
-            self.customuseragentval = True
-        else:
-            self.customuseragentval = False
-        self.useragentval = self.settingsdialog.useragentEdit.text()
-        if self.settingsdialog.checkHomePage.isChecked():
-            self.customhomepageurlval = True
-        else:
-            self.customhomepageurlval = False
-        self.homepageurlval = self.settingsdialog.homepageEdit.text()
-        self.minfontsizeval = self.settingsdialog.spinFontSize.value()
-        self.standardfontval = self.settingsdialog.standardfontCombo.currentText()
-        self.sansfontval = self.settingsdialog.sansfontCombo.currentText()
-        self.seriffontval = self.settingsdialog.seriffontCombo.currentText()
-        self.fixedfontval = self.settingsdialog.fixedfontCombo.currentText()
-        self.applysettings()
-        self.savesettings()
-    def defaultsettings(self): # This is used when settings can not be imported
+            websettingsdialog.checkHomePage.setChecked(True)
+        websettingsdialog.homepageEdit.setText(self.homepageurlval)
+        websettingsdialog.spinFontSize.setValue(self.minfontsizeval)
+        websettingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
+        websettingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
+        websettingsdialog.seriffontCombo.setCurrentFont(QFont(self.seriffontval))
+        websettingsdialog.fixedfontCombo.setCurrentFont(QFont(self.fixedfontval))
+
+        if dialog.exec_() == QDialog.Accepted:
+            if websettingsdialog.checkLoadImages.isChecked():
+                self.loadimagesval = True
+            else:
+                self.loadimagesval = False
+            if websettingsdialog.checkJavascript.isChecked():
+                self.javascriptenabledval = True
+            else:
+                self.javascriptenabledval = False
+            if websettingsdialog.checkUserAgent.isChecked():
+                self.customuseragentval = True
+            else:
+                self.customuseragentval = False
+            self.useragentval = websettingsdialog.useragentEdit.text()
+            if websettingsdialog.checkHomePage.isChecked():
+                self.customhomepageurlval = True
+            else:
+                self.customhomepageurlval = False
+            self.homepageurlval = websettingsdialog.homepageEdit.text()
+            self.minfontsizeval = websettingsdialog.spinFontSize.value()
+            self.standardfontval = websettingsdialog.standardfontCombo.currentText()
+            self.sansfontval = websettingsdialog.sansfontCombo.currentText()
+            self.seriffontval = websettingsdialog.seriffontCombo.currentText()
+            self.fixedfontval = websettingsdialog.fixedfontCombo.currentText()
+            self.applysettings()
+    def defaultsettings(self): 
+        """ This is used when settings can not be imported"""
         self.loadimagesval = True
         self.javascriptenabledval = True
         self.customuseragentval = False
@@ -492,40 +526,36 @@ class Main(QMainWindow):
         self.sansfontval = "Sans"
         self.seriffontval = "Serif"
         self.fixedfontval = "Monospace"
-    def opensettings(self, filepath): # Reads settings file and saves values in settings variables
-        Config = configparser.ConfigParser()
-        Config.read(filepath)
-        self.loadimagesval = Config.getboolean('Browsing', 'LoadImages')
-        self.javascriptenabledval = Config.getboolean('Browsing', 'JavaScriptEnabled')
-        self.customuseragentval = Config.getboolean('Browsing', 'CustomUserAgent')
-        self.useragentval = Config.get('Browsing', 'UserAgent')
-        self.customhomepageurlval = Config.getboolean('HomePage', 'CustomHomePageUrl')
-        self.homepageurlval = Config.get('HomePage', 'HomePageUrl')
-        self.minfontsizeval = Config.getint('Appearance', 'MinFontSize')
-        self.standardfontval = Config.get('Appearance', 'StandardFont')
-        self.sansfontval = Config.get('Appearance', 'SansFont')
-        self.seriffontval = Config.get('Appearance', 'SerifFont')
-        self.fixedfontval = Config.get('Appearance', 'FixedFont')
+    def opensettings(self): 
+        """ Reads settings file in ~/.config/quartz-browser/ directory and
+            saves values in settings variables"""
+        self.loadimagesval = self.settings.value('LoadImages').toBool()
+        self.javascriptenabledval = self.settings.value('JavaScriptEnabled').toBool()
+        self.customuseragentval = self.settings.value('CustomUserAgent').toBool()
+        self.useragentval = self.settings.value('UserAgent').toString()
+        self.customhomepageurlval = self.settings.value('CustomHomePageUrl').toBool()
+        self.homepageurlval = self.settings.value('HomePageUrl').toString()
+        self.minfontsizeval = int(self.settings.value('MinFontSize').toString())
+        self.standardfontval = self.settings.value('StandardFont').toString()
+        self.sansfontval = self.settings.value('SansFont').toString()
+        self.seriffontval = self.settings.value('SerifFont').toString()
+        self.fixedfontval = self.settings.value('FixedFont').toString()
     def savesettings(self):
-        Config = configparser.ConfigParser()
-        Config.add_section('Browsing')
-        Config.set('Browsing', 'LoadImages', str(self.loadimagesval))
-        Config.set('Browsing', 'JavaScriptEnabled', str(self.javascriptenabledval))
-        Config.set('Browsing', 'CustomUserAgent', str(self.customuseragentval))
-        Config.set('Browsing', 'UserAgent', str(self.useragentval))
-        Config.add_section('HomePage')
-        Config.set('HomePage', 'CustomHomePageUrl', str(self.customhomepageurlval))
-        Config.set('HomePage', 'HomePageUrl', str(self.homepageurlval))
-        Config.add_section('Appearance')
-        Config.set('Appearance', 'MinFontSize', str(self.minfontsizeval))
-        Config.set('Appearance', 'StandardFont', str(self.standardfontval))
-        Config.set('Appearance', 'SansFont', str(self.sansfontval))
-        Config.set('Appearance', 'SerifFont', str(self.seriffontval))
-        Config.set('Appearance', 'FixedFont', str(self.fixedfontval))
-        cfgfile = open(userhomedir + "/.config/quartz-browser/settings.ini", 'w')
-        Config.write(cfgfile)
-        cfgfile.close()
-    def applysettings(self): # Changes browser settings as in the settings variables
+        """ Writes setings to disk in ~/.config/quartz-browser/ directory"""
+        self.settings.setValue('LoadImages', self.loadimagesval)
+        self.settings.setValue('JavaScriptEnabled', self.javascriptenabledval)
+        self.settings.setValue('CustomUserAgent', self.customuseragentval)
+        self.settings.setValue('UserAgent', self.useragentval)
+        self.settings.setValue('CustomHomePageUrl', self.customhomepageurlval)
+        self.settings.setValue('HomePageUrl', self.homepageurlval)
+        self.settings.setValue('MinFontSize', self.minfontsizeval)
+        self.settings.setValue('StandardFont', self.standardfontval)
+        self.settings.setValue('SansFont', self.sansfontval)
+        self.settings.setValue('SerifFont', self.seriffontval)
+        self.settings.setValue('FixedFont', self.fixedfontval)
+    def applysettings(self):
+        """ Reads settings variables, and changes browser settings.This is run after
+            changing settings by Settings Dialog"""
         if self.customuseragentval == True:
             self.web.page().setUserAgentForUrl(self.useragentval)
         else:
@@ -534,24 +564,32 @@ class Main(QMainWindow):
             self.homepageurl = self.homepageurlval
         else:
             self.homepageurl = "http://www.google.com"
-        self.settings.setAttribute(QWebSettings.AutoLoadImages, self.loadimagesval)
+        self.websettings.setAttribute(QWebSettings.AutoLoadImages, self.loadimagesval)
         if self.loadimagesval:
             self.loadimagesaction.setChecked(True)
         else:
             self.loadimagesaction.setChecked(False)
-        self.settings.setAttribute(QWebSettings.JavascriptEnabled, self.javascriptenabledval)
+        self.websettings.setAttribute(QWebSettings.JavascriptEnabled, self.javascriptenabledval)
         if self.javascriptenabledval:
             self.javascriptmode.setChecked(True)
         else:
             self.javascriptmode.setChecked(False)
-        self.settings.setFontSize(QWebSettings.MinimumFontSize, self.minfontsizeval)
-        self.settings.setFontFamily(QWebSettings.StandardFont, self.standardfontval)
-        self.settings.setFontFamily(QWebSettings.SansSerifFont, self.sansfontval)
-        self.settings.setFontFamily(QWebSettings.SerifFont, self.seriffontval)
-        self.settings.setFontFamily(QWebSettings.FixedFont, self.fixedfontval)
-#        self.settings.setFontSize(QWebSettings.DefaultFontSize, 14)
-#        self.settings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
-
+        self.websettings.setFontSize(QWebSettings.MinimumFontSize, self.minfontsizeval)
+        self.websettings.setFontFamily(QWebSettings.StandardFont, self.standardfontval)
+        self.websettings.setFontFamily(QWebSettings.SansSerifFont, self.sansfontval)
+        self.websettings.setFontFamily(QWebSettings.SerifFont, self.seriffontval)
+        self.websettings.setFontFamily(QWebSettings.FixedFont, self.fixedfontval)
+#        self.websettings.setFontSize(QWebSettings.DefaultFontSize, 14)
+    def closeEvent(self, event):
+        """This saves all settings, bookmarks, cookies etc. during window close"""
+        self.savesettings()
+        writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
+        cookiesArray = QByteArray()
+        cookieList = self.cookiejar.allCookies()
+        for cookie in cookieList:
+            cookiesArray.append( cookie.toRawForm() + "\n" )
+        self.settings.setValue("cookies", cookiesArray)
+        super(Main, self).closeEvent(event)
 
 
 

@@ -93,7 +93,7 @@ class Ui_Dialog(object):
         self.spinFontSize = QtGui.QSpinBox(self.groupBox_2)
         self.spinFontSize.setGeometry(QtCore.QRect(140, 30, 151, 26))
         self.spinFontSize.setAlignment(QtCore.Qt.AlignCenter)
-        self.spinFontSize.setMinimum(6)
+        self.spinFontSize.setMinimum(2)
         self.spinFontSize.setMaximum(24)
         self.spinFontSize.setProperty("value", 12)
         self.spinFontSize.setObjectName(_fromUtf8("spinFontSize"))
