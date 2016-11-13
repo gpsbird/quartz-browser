@@ -1,8 +1,8 @@
 # Quartz Browser
 A useful fast Web Browser written in pyqt4
 
-**Version** = 1.4  
-**Dependency** = python2.7, python-qt4, python-configparser  
+**Version** = 1.5  
+**Dependency** = python-qt4, uget-gtk  
 
 ### Description
 This browser is aimed at ease of use, faster page loading, very short startup time.  
