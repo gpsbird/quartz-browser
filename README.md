@@ -2,7 +2,7 @@
 A useful fast Web Browser written in pyqt4
 
 **Version** = 1.5  
-**Dependency** = python-qt4, uget-gtk  
+**Dependency** = python-qt4, uget  
 
 ### Description
 This browser is aimed at ease of use, faster page loading, very short startup time.  
