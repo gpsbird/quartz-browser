@@ -6,12 +6,12 @@ class DownloadManager(object):
     def __init__(self, networkmanager):
         self.networkmanager = networkmanager
     def download(self, networkrequest, filepath):
-#        networkrequest.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         self.downloadBuffer = QByteArray()
         self.downloadpath = filepath
         self.download = self.networkmanager.get(networkrequest)
         self.download.readyRead.connect(self.appendData)
         self.download.finished.connect(self.saveToDisk)
+        self.download.error.connect(self.downloadfailed)
 
     def appendData(self):
         self.downloadBuffer += self.download.readAll()
@@ -27,5 +27,6 @@ class DownloadManager(object):
           return
         QMessageBox.information(None, "Successful !","File has been successfully saved!")
 
-
+    def downloadfailed(self, error):
+        QMessageBox.information(None, "Download Error !","An error occured while downloading!")
 

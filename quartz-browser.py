@@ -1,18 +1,22 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.4.3
-Dependency = python-qt4, uget-gtk
-Usage = A Light Weight Internet Browser
-Features = Unified Google_Search & Url Bar
-           Turn Javascript, Load Images on/off
-           Find Text inside page
-           Print Page
-           Save page as JPG, html
+version = 1.6
+Dependency = python-qt4, uget
+Description = A Light Weight Internet Browser
+Features =  Change User agent to mobile/desktop
+            Print Page to PDF
+            Save page as JPG, html
+            Turn Javascript, Load Images on/off
+            Find Text inside page
+            Easy accessible toolbar
+            Tabbed browsing
 Last Update : 
-            Save as HTML added.
-            Dependency on python-configparser has been removed.
-            Now cookies are saved.
+            Tabbed browsing.
+            Auto add file-extension while saving images.
+            NetworkAccessManager is now global variable, which resolves many rendering issues
+            Multiple files can be uploaded
+            Images can be saved without downloading
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -29,9 +33,11 @@ Last Update :
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-# TODO : Auto complete username password
-#        remove Some menu items
-#        Use of internal download manager
+# TODO : 
+#        Auto complete username password
+#        Implementation of internal download manager
+#        Clear cookies button
+#        change search engine
 
 import sys
 from os.path import abspath, exists
@@ -39,13 +45,13 @@ from os import environ, mkdir
 from subprocess import Popen
 from time import strftime
 
-from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings
+from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize
 from PyQt4.QtCore import QFileInfo, QByteArray
 
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
-from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QHeaderView, QProgressBar
-from PyQt4.QtGui import QPainter, QPixmap, QFont
+from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QHeaderView, QProgressBar, QMessageBox
+from PyQt4.QtGui import QPainter, QPixmap, QFont, QTabWidget
 
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebFrame, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCookie, QNetworkRequest
@@ -57,47 +63,133 @@ from download_manager import DownloadManager
 import quartz_common
 
 
-userhomedir = environ['HOME']
-configdir = userhomedir+"/.config/quartz-browser/"
+homedir = environ['HOME']
+downloaddir = homedir+"/Downloads/"
+docdir = homedir+"/Documents/"
+configdir = homedir+"/.config/quartz-browser/"
 
 class MyCookieJar(QNetworkCookieJar):
     """ Reimplemented QNetworkCookieJar to get cookie import/export feature"""
     def __init__(self, parent=None):
         super(MyCookieJar, self).__init__(parent)
-        self.window = parent
-        cookiesValue = self.window.settings.value("cookies").toByteArray()
+    def importCookies(self, window):
+        """ Window object must contain QSetting object 'self.settings' before calling this"""
+        cookiesValue = window.settings.value("cookies").toByteArray()
         if cookiesValue:
             cookiesList = QNetworkCookie.parseCookies(cookiesValue)
             self.setAllCookies(cookiesList)
 
+class NetworkAccessManager(QNetworkAccessManager):
+    def __init__(self, *args, **kwargs):
+        super(NetworkAccessManager, self).__init__(*args, **kwargs)
+        self.authenticationRequired.connect(self.provideAuthentication)
+    def provideAuthentication(self, reply, auth):
+        username = QInputDialog.getText(None, "Authentication", "Enter your username:", QLineEdit.Normal)
+        if username[1]:
+            auth.setUser(username[0])
+            password = QInputDialog.getText(None, "Authentication", "Enter your password:", QLineEdit.Password)
+            if password[1]:
+                auth.setPassword(password[0])
+
+# NetworkAccessManager must be global variable, otherwise cause rendering problem
+cookiejar = MyCookieJar(QApplication.instance())
+networkmanager = NetworkAccessManager(QApplication.instance())
+networkmanager.setCookieJar(cookiejar)
+
 class MyWebPage(QWebPage):
-    """Reimplemented QWebPage to get User Agent Changing facility"""
+    """Reimplemented QWebPage to get User Agent Changing and multiple file uploads facility"""
     def __init__(self):
         QWebPage.__init__(self)
         self.setForwardUnsupportedContent(True)
-        self.useragent = "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1"
+        self.setNetworkAccessManager(networkmanager)
+        self.useragent = ""
     def userAgentForUrl(self, url):
+        """ This is called when it loads any page, to get useragent string"""
         return self.useragent
     def setUserAgentForUrl(self, useragent):
         self.useragent = useragent
+    def clearUserAgent(self):
+        """ Resets the useragent to default value"""
+        self.useragent = QWebPage.userAgentForUrl(self, QUrl(""))
+    def extension(self, extension, option, output):
+        """ Allows to upload files where multiple selections are allowed"""
+        if extension == QWebPage.ChooseMultipleFilesExtension:
+            output.fileNames = QFileDialog.getOpenFileNames(self.view(), "Select Files to Upload", homedir)
+            return True
+        return False
 
 class MyWebView(QWebView):
-#    _windows = set()
-    def __init__(self, **kargs):
-        QWebView.__init__(self, **kargs)
+    """ Many signals are reimplemented to support multi-tab feature"""
+    loadingStarted = pyqtSignal()
+    loadingFinished = pyqtSignal()
+    loadingProgress = pyqtSignal(int, QWebView)
+    urlchanged = pyqtSignal(str, QWebView)
+    titlechanged = pyqtSignal(str, QWebView)
+    windowCreated = pyqtSignal(QWebView)
+
+    def __init__(self, parent=None):
+        QWebView.__init__(self, parent)
         self.setPage(MyWebPage())
+        self.loading = False
+        self.progressVal = 0
+        self.setMinimumSize(1024,624)
+        self.loadStarted.connect(self.loadstarted)
+        self.loadFinished.connect(self.loadfinished)
+        self.loadProgress.connect(self.loadprogress)
+        self.urlChanged.connect(self.UrlChanged)
+        self.titleChanged.connect(self.TitleChanged)
+    def loadstarted(self):
+        self.loading = True
+        self.loadingStarted.emit()
+    def loadfinished(self):
+        self.loading = False
+        self.loadingFinished.emit()
+    def loadprogress(self, progress):
+        self.progressVal = progress
+        self.loadingProgress.emit(progress, self)
+    def UrlChanged(self, url):
+        url = url.toString()
+        self.urlchanged.emit(url, self)
+    def TitleChanged(self, title):
+        self.titlechanged.emit(title, self)
     def createWindow(self, windowtype):
         """This function is internally called when new window is requested.
-           This will must return an window object"""
-        return self
-#        window = self.newWindow()
-#        window.show()
-#        return window.web
-#    def newWindow(cls):
-#        window = Main()
-#        window.setAttribute(Qt.WA_DeleteOnClose)
-#        cls._windows.add(window)
-#        return window
+           This will must return a QWebView object"""
+        webview = MyWebView(self.parent())
+        self.windowCreated.emit(webview)
+        return webview
+    def contextMenuEvent(self, event):
+        """ Overrides the default context menu"""
+        result = self.page().mainFrame().hitTestContent(event.pos())
+        self.rel_pos = event.pos()
+        menu = QMenu(self)
+        if result.isContentSelected():
+          menu.addAction(self.pageAction(QWebPage.Copy))
+        if not result.imageUrl().isEmpty():
+          saveImage = QAction("Save Image", self)
+          saveImage.triggered.connect(self.saveImageToDisk)
+          menu.addAction(saveImage)
+          menu.addAction(self.pageAction(QWebPage.CopyImageUrlToClipboard))
+          menu.addSeparator()
+        if not result.linkUrl().isEmpty():
+          menu.addAction(self.pageAction(QWebPage.OpenLinkInNewWindow))
+#          menu.addAction(self.pageAction(QWebPage.OpenLink))
+          menu.addAction(self.pageAction(QWebPage.CopyLinkToClipboard))
+          menu.addAction(self.pageAction(QWebPage.DownloadLinkToDisk))
+        menu.exec_(self.mapToGlobal(event.pos()))
+    def saveImageToDisk(self, checked):
+        """ This saves an image in page directly without downloading"""
+        pm = self.page().mainFrame().hitTestContent(self.rel_pos).pixmap()
+        url = self.page().mainFrame().hitTestContent(self.rel_pos).imageUrl()
+        name = QFileInfo(url.toString()).fileName()
+        filepath = QFileDialog.getSaveFileName(self,
+                                      "Select Image to Save", downloaddir + name,
+                                      "Image Files (*.jpg *.png *.jpeg)" )
+        if not filepath.isEmpty():
+          if not (filepath.endsWith(".jpg",0) or filepath.endsWith(".png",0) or filepath.endsWith(".jpeg",0)):
+            filepath += ".png"
+          if pm.save(filepath):
+            QMessageBox.information(None, "Successful !","Image has been successfully saved!")
 
 class QurlEdit(QLineEdit):
     """ Reimplemented QLineEdit to get all selected when double clicked"""
@@ -125,65 +217,69 @@ class Main(QMainWindow):
         else:
             self.defaultsettings()
         self.websettings = QWebSettings.globalSettings()
-        self.websettings.setMaximumPagesInCache(10)
         self.websettings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
+        self.websettings.setMaximumPagesInCache(10)
+#        self.websettings.setAttribute(QWebSettings.PrintElementBackgrounds, False)
         self.history = []
         self.bookmarks = parsebookmarks(configdir+"bookmarks.txt")
+        cookiejar.importCookies(self)
         self.findmodeon = False
         self.initUI()
 
     def initUI(self):
-###############################  Create Menu and Actions ##############################
-        self.loadimagesaction = QAction(self)
-        self.loadimagesaction.setText("Load Images")
+###############################  Create  Actions ##############################
+        self.loadimagesaction = QAction("Load Images",self)
         self.loadimagesaction.setCheckable(True)
         self.loadimagesaction.triggered.connect(self.loadimages)
-        self.javascriptmode = QAction(self)
-        self.javascriptmode.setText("Enable Javascript")
+
+        self.javascriptmode = QAction("Enable Javascript",self)
         self.javascriptmode.setCheckable(True)
         self.javascriptmode.triggered.connect(self.setjavascript)
-        self.zoominaction = QAction(self)
-        self.zoominaction.setText("Zoom  In")
+
+        self.zoominaction = QAction("Zoom  In",self)
         self.zoominaction.setShortcut("Ctrl++")
         self.zoominaction.triggered.connect(self.zoomin)
-        self.zoomoutaction = QAction(self)
-        self.zoomoutaction.setText("Zoom  Out")
+
+        self.zoomoutaction = QAction("Zoom  Out",self)
         self.zoomoutaction.setShortcut("Ctrl+-")
         self.zoomoutaction.triggered.connect(self.zoomout)
-        self.fullscreenaction = QAction(self)
-        self.fullscreenaction.setText("Toggle Fullscreen")
+
+        self.fullscreenaction = QAction("Toggle Fullscreen",self)
         self.fullscreenaction.setShortcut("F11")
         self.fullscreenaction.triggered.connect(self.fullscreenmode)
-        self.websettingsaction = QAction(self)
-        self.websettingsaction.setText("Settings")
+
+        self.websettingsaction = QAction("Settings",self)
         self.websettingsaction.setShortcut("Ctrl+,")
         self.websettingsaction.triggered.connect(self.settingseditor)
-        self.saveasimageaction = QAction(self)
-        self.saveasimageaction.setText("Save as Image")
+
+        self.saveasimageaction = QAction("Save as Image",self)
         self.saveasimageaction.setShortcut("Ctrl+Shift+S")
         self.saveasimageaction.triggered.connect(self.saveasimage)
-        self.saveashtmlaction = QAction(self)
-        self.saveashtmlaction.setText("Save as Html")
+
+        self.saveashtmlaction = QAction("Save as Html",self)
         self.saveashtmlaction.setShortcut("Ctrl+S")
         self.saveashtmlaction.triggered.connect(self.saveashtml)
-        self.printaction = QAction(self)
-        self.printaction.setText("Print")
+
+        self.printaction = QAction("Print",self)
         self.printaction.setShortcut("Ctrl+P")
         self.printaction.triggered.connect(self.printpage)
-        self.quitaction = QAction(self)
-        self.quitaction.setText("Quit")
+
+        self.quitaction = QAction("Quit",self)
         self.quitaction.setShortcut("Ctrl+Q")
         self.quitaction.triggered.connect(self.close)
 
+################ Add Actions to Menu ####################
         self.menu = QMenu(self)
-        self.menu.addAction(self.loadimagesaction)
-        self.menu.addAction(self.javascriptmode)
-        self.menu.addAction(self.websettingsaction)
-        self.menu.addSeparator()
         self.menu.addAction(self.zoominaction)
         self.menu.addAction(self.zoomoutaction)
         self.menu.addAction(self.fullscreenaction)
         self.menu.addSeparator()
+
+        self.menu.addAction(self.loadimagesaction)
+        self.menu.addAction(self.javascriptmode)
+        self.menu.addAction(self.websettingsaction)
+        self.menu.addSeparator()
+
         self.menu.addAction(self.saveasimageaction)
         self.menu.addAction(self.saveashtmlaction)
         self.menu.addAction(self.printaction)
@@ -199,39 +295,51 @@ class Main(QMainWindow):
         self.setCentralWidget(self.centralwidget)
 
         self.line = QurlEdit(self) 
-        self.line.setStyleSheet("font-size:15px;")
         self.line.returnPressed.connect(self.Enter)
         self.line.textEdited.connect(self.urlsuggestions)
-        self.reload = QPushButton(QIcon(":/view-refresh.png"), "",self) 
+
+        self.addtabBtn = QPushButton(QIcon(":/add-tab.png"), "",self)
+        self.addtabBtn.setToolTip("New Tab\n[Ctrl+Tab]")
+        self.addtabBtn.setShortcut("Ctrl+Tab")
+        self.addtabBtn.clicked.connect(self.addTab)
+
+        self.reload = QPushButton(QIcon(":/refresh.png"), "",self) 
         self.reload.setMinimumSize(35,26) 
-        self.reload.setShortcut("F5") 
-        self.reload.setStyleSheet("font-size:23px;") 
+        self.reload.setToolTip("Reload/Stop\n  [Space]")
+        self.reload.setShortcut("Space")
         self.reload.clicked.connect(self.Reload)
-        self.back = QPushButton(QIcon(":/go-previous.png"), "", self) 
+
+        self.back = QPushButton(QIcon(":/prev.png"), "", self) 
+        self.back.setToolTip("Previous Page\n [Backspace]")
         self.back.setMinimumSize(35,26) 
-        self.back.setStyleSheet("font-size:23px;") 
         self.back.clicked.connect(self.Back)
-        self.forw = QPushButton(QIcon(":/go-next.png"), "",self) 
+
+        self.forw = QPushButton(QIcon(":/next.png"), "",self) 
+        self.forw.setToolTip("Next Page\n [Shift+Backspace]")
         self.forw.setMinimumSize(35,26) 
-        self.forw.setStyleSheet("font-size:23px;") 
         self.forw.clicked.connect(self.Forward)
+
         self.addbookmarkBtn = QPushButton(QIcon(":/add-bookmark.png"), "", self)
-        self.addbookmarkBtn.setToolTip("Add Bookmark")
+        self.addbookmarkBtn.setShortcut("Ctrl+D")
+        self.addbookmarkBtn.setToolTip("Add Bookmark\n   [Ctrl+D]")
         self.addbookmarkBtn.clicked.connect(self.addbookmark)
+
         self.menuBtn = QToolButton(self)
         self.menuBtn.setIcon(QIcon(":/menu.png"))
         self.menuBtn.setMenu(self.menu)
         self.menuBtn.setPopupMode(QToolButton.InstantPopup)
 
         self.bookmarkBtn = QPushButton(QIcon(":/bookmarks.png"), "", self)
-        self.bookmarkBtn.setToolTip("Manage Bookmarks")
+        self.bookmarkBtn.setToolTip("Manage Bookmarks\n         [Alt+B]")
+        self.bookmarkBtn.setShortcut("Alt+B")
         self.bookmarkBtn.clicked.connect(self.managebookmarks)
         self.historyBtn = QPushButton(QIcon(":/history.png"), "", self)
-        self.historyBtn.setToolTip("View History")
+        self.historyBtn.setShortcut("Alt+H")
+        self.historyBtn.setToolTip("View History\n     [Alt+H]")
         self.historyBtn.clicked.connect(self.viewhistory)
 
         self.findBtn = QPushButton(QIcon(":/search.png"), "", self)
-        self.findBtn.setToolTip("Find Text in \n This Page")
+        self.findBtn.setToolTip("Find Text in \n This Page\n [Ctrl+F]")
         self.findBtn.setShortcut("Ctrl+F")
         self.findBtn.clicked.connect(self.findmode)
         self.find = QPushButton(self)
@@ -258,42 +366,74 @@ class Main(QMainWindow):
         self.pbar.setMaximumWidth(480)
         self.pbar.hide()
 
-        self.web = MyWebView(loadProgress = self.pbar.setValue, loadFinished = self.pbar.hide, loadStarted = self.pbar.show, titleChanged = self.setWindowTitle) 
-        self.web.setMinimumSize(1024,640)
-        self.applysettings()
+        self.tabWidget = QTabWidget(self)
+#        self.tabWidget.setMovable(True)
+        self.tabWidget.setTabsClosable(True)
+        self.tabWidget.setDocumentMode(True)
+        self.tabWidget.tabBar().setExpanding(True)
+        self.tabWidget.tabBar().setElideMode(Qt.ElideMiddle)
+        self.tabWidget.currentChanged.connect(self.onTabSwitch)
+        self.tabWidget.tabCloseRequested.connect(self.closeTab)
+        self.addTab()
 #       
-        self.web.urlChanged.connect(self.UrlChanged)
-        self.web.loadStarted.connect(self.startedloading) 
-        self.web.loadFinished.connect(self.finishedloading) 
-        self.web.page().linkHovered.connect(self.LinkHovered)
-        self.web.page().printRequested.connect(self.printpage)
-        self.web.page().downloadRequested.connect(self.download_requested_file)
-        self.web.page().unsupportedContent.connect(self.download_file)
 
-        self.cookiejar = MyCookieJar(self)
-        self.networkmanager = QNetworkAccessManager()
-        self.networkmanager.setCookieJar(self.cookiejar)
-        self.web.page().setNetworkAccessManager(self.networkmanager)
-
-        grid.addWidget(self.back,0,0, 1, 1) 
-        grid.addWidget(self.forw,0,1, 1, 1) 
-        grid.addWidget(self.reload,0,2, 1, 1) 
-        grid.addWidget(self.line,0,3, 1, 1) 
-        grid.addWidget(self.find, 0,4, 1, 1)
-        grid.addWidget(self.findprev, 0,5, 1, 1)
-        grid.addWidget(self.cancelfind, 0,6, 1, 1)
-        grid.addWidget(self.addbookmarkBtn,0,7, 1, 1) 
-        grid.addWidget(self.menuBtn,0,8, 1, 1) 
-        grid.addWidget(self.bookmarkBtn,0,9, 1, 1) 
-        grid.addWidget(self.historyBtn,0,10, 1, 1) 
-        grid.addWidget(self.findBtn,0,11, 1, 1) 
-        grid.addWidget(self.web, 2, 0, 1, 12)
+        for index, widget in enumerate([self.addtabBtn, self.back, self.forw, self.reload, self.line, self.find,
+                self.findprev, self.cancelfind, self.addbookmarkBtn, self.menuBtn,
+                self.bookmarkBtn, self.historyBtn, self.findBtn]):
+            grid.addWidget(widget, 0,index,1,1)
+        grid.addWidget(self.tabWidget, 2, 0, 1, 13)
 #---------Window settings --------------------------------
         self.setWindowIcon(QIcon(":/view-refresh.png")) 
-        self.setStyleSheet("background-color:") 
-        self.status = self.statusBar()
+        self.setWindowTitle("Quartz Browser")
+#        self.setStyleSheet("background-color:#ffffff;font-size:15px;") 
+
+#   Must be at the end, otherwise cause segmentation fault
+        self.status = self.statusBar() 
         self.status.setMaximumHeight(18)
         self.status.addPermanentWidget(self.pbar) 
+    def addTab(self, tab=None):
+        """ Creates a new tab and add to QTableWidget
+            applysettings() must be called after adding each tab"""
+        if not tab:
+            tab = MyWebView(self.tabWidget) 
+        tab.windowCreated.connect(self.addTab)
+        tab.loadingStarted.connect(self.startedloading) 
+        tab.loadingFinished.connect(self.finishedloading) 
+        tab.loadingProgress.connect(self.onProgress)
+        tab.urlchanged.connect(self.onUrlChange)
+        tab.titlechanged.connect(self.onTitleChange)
+        tab.page().linkHovered.connect(self.LinkHovered)
+        tab.page().printRequested.connect(self.printpage)
+        tab.page().downloadRequested.connect(self.download_requested_file)
+        tab.page().unsupportedContent.connect(self.download_file)
+
+        self.tabWidget.addTab(tab, "( Untitled )")
+        if self.tabWidget.count()==1:
+            self.tabWidget.tabBar().hide()
+        else:
+            self.tabWidget.tabBar().show()
+        self.tabWidget.setCurrentIndex(self.tabWidget.count()-1)
+        self.applysettings()
+    def closeTab(self, index=None):
+        """ Closes tab, hides tabbar if only one tab remains"""
+        if index==None:
+            index = self.tabWidget.currentIndex()
+        widget = self.tabWidget.widget(index)
+        self.tabWidget.removeTab(index)
+        widget.deleteLater()
+        if self.tabWidget.count()==1:
+            self.tabWidget.tabBar().hide()
+    def onTabSwitch(self, index):
+        """ Updates urlbox, refresh icon, progress bar on switching tab"""
+        if self.tabWidget.currentWidget().loading == True:
+            self.reload.setIcon(QIcon(":/stop.png"))
+            self.pbar.setValue(self.tabWidget.currentWidget().progressVal)
+            self.pbar.show()
+        else:
+            self.reload.setIcon(QIcon(":/refresh.png"))
+            self.pbar.hide()
+        url =  self.tabWidget.currentWidget().url().toString()
+        self.line.setText(url)
     def Enter(self): 
         url = str(self.line.text())
         if ("://" not in url and "." not in url) or (" " in url): # If text is not valid url
@@ -307,45 +447,52 @@ class Main(QMainWindow):
                 validurl = True
         if not validurl:
             url = "http://"+url
-        self.web.load(QUrl(url))
+        self.tabWidget.currentWidget().load(QUrl(url))
         self.line.setText(url)
     def Back(self): 
-        self.web.back() 
+        self.tabWidget.currentWidget().back() 
     def Forward(self): 
-        self.web.forward()
+        self.tabWidget.currentWidget().forward()
     def Reload(self):
-        if self.loading:
-            self.web.stop()
+        if self.tabWidget.currentWidget().loading:
+            self.tabWidget.currentWidget().stop()
         else: 
-            self.web.reload()
+            self.tabWidget.currentWidget().reload()
 
-    def UrlChanged(self):
-        url =  self.web.url().toString()
-        self.line.setText(url)
-        for item in self.history:  # Removes the old item, inserts new same item on the top
-            if url in item[1]:
-                self.history.remove(item)
-        self.history.insert(0, [strftime("%b %d, %H:%M"),url])
+    def onUrlChange(self,url, webview):
+        if webview is self.tabWidget.currentWidget():
+            self.line.setText(url)
+            for item in self.history:  # Removes the old item, inserts new same item on the top
+                if url in item[1]:
+                    self.history.remove(item)
+            self.history.insert(0, [strftime("%b %d, %H:%M"),url])
+    def onTitleChange(self, title, webview):
+        index = self.tabWidget.indexOf(webview)
+        if not title.isEmpty():
+            self.tabWidget.tabBar().setTabText(index, title)
     def LinkHovered(self,l): 
         self.status.showMessage(l)
-    def startedloading(self):
-        self.reload.setIcon(QIcon(":/process-stop.png"))
-        self.loading = True   # Required for reload button
-    def finishedloading(self, ok):
-        if not ok:
-            self.status.showMessage("Error  : Problem Occured in loading Page !")
-        self.reload.setIcon(QIcon(":/view-refresh.png"))
-        self.loading = False
-    def download_file(self, networkrequest):
+    def startedloading(self, webview=None):
+        if self.tabWidget.currentWidget().loading == True:
+          self.reload.setIcon(QIcon(":/stop.png"))
+          self.pbar.show()
+    def finishedloading(self, webview=None):
+        if self.tabWidget.currentWidget().loading == False:
+          self.reload.setIcon(QIcon(":/refresh.png"))
+          self.pbar.hide()
+    def onProgress(self, progress, webview):
+        if webview is self.tabWidget.currentWidget():
+            self.pbar.setValue(progress)
+    def download_file(self, networkrequest=None):
         url = str(networkrequest.url().toString())
         Popen(["uget-gtk", url])
     def download_requested_file(self, networkrequest):
         filename = QFileInfo(networkrequest.url().path()).fileName()
         filepath = QFileDialog.getSaveFileName(self,
-                                      "Enter FileName to Save", "/home/pi/Downloads/"+str(filename),
+                                      "Enter FileName to Save", downloaddir+str(filename),
                                       "All Files (*)" )
         if not filepath.isEmpty():
-            self.newdownload = DownloadManager(self.networkmanager)
+            self.newdownload = DownloadManager(networkmanager)
             self.newdownload.download(networkrequest, filepath)
 
     def urlsuggestions(self, text):
@@ -362,24 +509,26 @@ class Main(QMainWindow):
 
 
     def saveasimage(self):
+        """ Saves the whole page as PNG image"""
         filename = QFileDialog.getSaveFileName(self,
-                                      "Select Image to Save", userhomedir + "/Documents/" + self.web.page().mainFrame().title() +".png",
+                                      "Select Image to Save", downloaddir + self.tabWidget.currentWidget().page().mainFrame().title() +".png",
                                       "PNG Image (*.png)" )
         if not filename.isEmpty():
-            viewportsize = self.web.page().viewportSize()
-            contentsize = self.web.page().mainFrame().contentsSize()
-            self.web.page().setViewportSize(contentsize)
+            viewportsize = self.tabWidget.currentWidget().page().viewportSize()
+            contentsize = self.tabWidget.currentWidget().page().mainFrame().contentsSize()
+            self.tabWidget.currentWidget().page().setViewportSize(contentsize)
             img = QPixmap(contentsize)
             painter = QPainter()
             painter.begin(img)
-            self.web.page().mainFrame().render(painter, QWebFrame.AllLayers)
+            self.tabWidget.currentWidget().page().mainFrame().render(painter, QWebFrame.AllLayers)
             painter.end()
             img.save(filename)
-            self.web.page().setViewportSize(viewportsize)
+            self.tabWidget.currentWidget().page().setViewportSize(viewportsize)
     def saveashtml(self):
-        html = self.web.page().mainFrame().toHtml()
+        """ Saves current page as HTML , bt does not saves any content"""
+        html = self.tabWidget.currentWidget().page().mainFrame().toHtml().toUtf8()
         filename = QFileDialog.getSaveFileName(self,
-                                      "Enter HTML File Name", userhomedir + "/Documents/" + self.web.page().mainFrame().title()+".html",
+                                      "Enter HTML File Name", downloaddir + self.tabWidget.currentWidget().page().mainFrame().title()+".html",
                                       "HTML Document (*.html)" )
         if not filename.isEmpty():
             htmlfile = open(filename, 'w')
@@ -387,22 +536,22 @@ class Main(QMainWindow):
             htmlfile.close()
     def printpage(self, page):
         printer = QPrinter(mode=QPrinter.HighResolution)
-        printer.setOutputFileName(userhomedir + "/Documents/" + self.web.page().mainFrame().title() + ".pdf")
+        printer.setOutputFileName(docdir + self.tabWidget.currentWidget().page().mainFrame().title() + ".pdf")
         print_dialog = QPrintDialog(printer, self)
         if print_dialog.exec_() == QDialog.Accepted:
           if page != 0:
             page.print_(printer)
           else:
-            self.web.print_(printer)
+            self.tabWidget.currentWidget().print_(printer)
 
     def addbookmark(self):
         dialog = QDialog(self)
         addbmkdialog = Add_Bookmark_Dialog()
         addbmkdialog.setupUi(dialog)
-        addbmkdialog.titleEdit.setText(self.windowTitle())
+        addbmkdialog.titleEdit.setText(self.tabWidget.currentWidget().page().mainFrame().title())
         addbmkdialog.addressEdit.setText(self.line.text())
         if (dialog.exec_() == QDialog.Accepted):
-            self.bookmarks.insert(0, [str(addbmkdialog.titleEdit.text()), str(addbmkdialog.addressEdit.text())])
+            self.bookmarks.insert(0, [addbmkdialog.titleEdit.text().toUtf8(), addbmkdialog.addressEdit.text()])
             self.status.showMessage("Bookmark has been Saved")
     def managebookmarks(self):
         dialog = QDialog(self)
@@ -427,26 +576,27 @@ class Main(QMainWindow):
         self.line.setFocusPolicy(Qt.StrongFocus)
         self.line.setFocus()
     def cancelfindmode(self):
+        """ Hides the find buttons, updates urlbox"""
         self.findmodeon = False
-        self.web.findText("")
+        self.tabWidget.currentWidget().findText("")
         self.find.hide()
         self.findprev.hide()
         self.cancelfind.hide()
-        self.line.setText(self.web.url().toString())
+        self.line.setText(self.tabWidget.currentWidget().url().toString())
     def findnext(self):
         text = self.line.text()
-        self.web.findText(text)
+        self.tabWidget.currentWidget().findText(text)
     def findback(self):
         text = self.line.text()
-        self.web.findText(text, QWebPage.FindBackward)
+        self.tabWidget.currentWidget().findText(text, QWebPage.FindBackward)
 
 #####################  View Settings  ###################
     def zoomin(self):
-        zoomlevel = self.web.textSizeMultiplier()
-        self.web.setTextSizeMultiplier(zoomlevel+0.1) # Use setZoomFactor() to zoom text and images
+        zoomlevel = self.tabWidget.currentWidget().textSizeMultiplier()
+        self.tabWidget.currentWidget().setTextSizeMultiplier(zoomlevel+0.1) # Use setZoomFactor() to zoom text and images
     def zoomout(self):
-        zoomlevel = self.web.textSizeMultiplier()
-        self.web.setTextSizeMultiplier(zoomlevel-0.1)
+        zoomlevel = self.tabWidget.currentWidget().textSizeMultiplier()
+        self.tabWidget.currentWidget().setTextSizeMultiplier(zoomlevel-0.1)
     def fullscreenmode(self):
         if self.isFullScreen():
             self.showNormal()
@@ -454,12 +604,14 @@ class Main(QMainWindow):
             self.showFullScreen()
 
     def loadimages(self, state):
+        """ TOggles image loading on/off"""
         self.websettings.setAttribute(QWebSettings.AutoLoadImages, state)
         if state:
             self.loadimagesval = True
         else:
             self.loadimagesval = False
     def setjavascript(self, state):
+        """ Toggles js on/off """
         self.websettings.setAttribute(QWebSettings.JavascriptEnabled, state)
         if state:
             self.javascriptenabledval = True
@@ -514,7 +666,7 @@ class Main(QMainWindow):
             self.fixedfontval = websettingsdialog.fixedfontCombo.currentText()
             self.applysettings()
     def defaultsettings(self): 
-        """ This is used when settings can not be imported"""
+        """ This settings is used when settings can not be imported"""
         self.loadimagesval = True
         self.javascriptenabledval = True
         self.customuseragentval = False
@@ -557,9 +709,9 @@ class Main(QMainWindow):
         """ Reads settings variables, and changes browser settings.This is run after
             changing settings by Settings Dialog"""
         if self.customuseragentval == True:
-            self.web.page().setUserAgentForUrl(self.useragentval)
+            self.tabWidget.currentWidget().page().setUserAgentForUrl(self.useragentval)
         else:
-            self.web.page().setUserAgentForUrl("Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/601.1 (KHTML, like Gecko) Version/8.0 Safari/601.1")
+            self.tabWidget.currentWidget().page().clearUserAgent()
         if self.customhomepageurlval:
             self.homepageurl = self.homepageurlval
         else:
@@ -585,21 +737,25 @@ class Main(QMainWindow):
         self.savesettings()
         writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
         cookiesArray = QByteArray()
-        cookieList = self.cookiejar.allCookies()
+        cookieList = cookiejar.allCookies()
         for cookie in cookieList:
             cookiesArray.append( cookie.toRawForm() + "\n" )
         self.settings.setValue("cookies", cookiesArray)
-        super(Main, self).closeEvent(event)
+        return super(Main, self).closeEvent(event)
 
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setOrganizationName("quartz-browser")
+    app.setApplicationName("quartz")
     main= Main() 
     main.show()
     if len(sys.argv)> 1:
         if sys.argv[1].startswith("/"):
             url = "file://"+sys.argv[1]
+        else:
+            url = sys.argv[1]
         main.GoTo(url)
 
     else:
