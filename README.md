@@ -4,6 +4,8 @@ A useful fast Web Browser written in pyqt4
 **Version** = 1.6  
 **Dependency** = python-qt4, uget  
 
+### Download
+Download the package in .deb format [here](http://github.com/ksharindam/quartz-browser/releases)
 ### Description
 This browser is aimed at ease of use, faster page loading, very short startup time.  
 This has minimal settings to avoid confusion.Yet it has most useful settings, such as load images on/off, javascript on/off, change font.  
@@ -12,6 +14,7 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
 
 **Usage** = quartz.py URL  
  $ *quartz.py http://www.google.com*  
+ 
  
 #### Features :  
  1. Unified Search/Url Bar  
