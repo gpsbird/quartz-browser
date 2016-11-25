@@ -1,7 +1,7 @@
 # Quartz Browser
 A useful fast Web Browser written in pyqt4
 
-**Version** = 1.5  
+**Version** = 1.6  
 **Dependency** = python-qt4, uget  
 
 ### Description
@@ -20,6 +20,7 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
  4. Print Page  
  5. Export full page as PNG image  
  6. Custom User Agent  
+ 7. Tabbed browsing
 
 ### Installation
  1. Extract the archive  
