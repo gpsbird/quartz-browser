@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.6
-Dependency = python-qt4, uget
+version = 1.7-beta
+Dependency = python-qt4
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
             Print Page to PDF
@@ -11,12 +11,13 @@ Features =  Change User agent to mobile/desktop
             Find Text inside page
             Easy accessible toolbar
             Tabbed browsing
+            Download Manager with pause/resume support
 Last Update : 
-            Tabbed browsing.
-            Auto add file-extension while saving images.
-            NetworkAccessManager is now global variable, which resolves many rendering issues
-            Multiple files can be uploaded
-            Images can be saved without downloading
+            Added font blocker settings
+            Added clear cookies option
+            Google search address was changed to https
+            Fixed url/search prediction error or url with space
+            GUI downloadmanager with pause/resume support
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -35,31 +36,29 @@ Last Update :
 """
 # TODO : 
 #        Auto complete username password
-#        Implementation of internal download manager
-#        Clear cookies button
 #        change search engine
 
-import sys
+import sys, shlex
 from os.path import abspath, exists
 from os import environ, mkdir
 from subprocess import Popen
 from time import strftime
 
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize
-from PyQt4.QtCore import QFileInfo, QByteArray
+from PyQt4.QtCore import QFileInfo, QByteArray, QEventLoop
 
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
-from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QHeaderView, QProgressBar, QMessageBox
+from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QProgressBar, QMessageBox, QInputDialog
 from PyQt4.QtGui import QPainter, QPixmap, QFont, QTabWidget
 
-from PyQt4.QtWebKit import QWebView, QWebPage, QWebFrame, QWebSettings
+from PyQt4.QtWebKit import QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCookie, QNetworkRequest
 
-from settings_dialog import Ui_Dialog
+from settings_dialog import Ui_SettingsDialog
 from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
-from bookmarkparser import parsebookmarks, writebookmarks
-from download_manager import DownloadManager
+from bookmarkparser import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
+from download_manager import Download, DownloadsModel, Downloads_Dialog
 import quartz_common
 
 
@@ -67,6 +66,15 @@ homedir = environ['HOME']
 downloaddir = homedir+"/Downloads/"
 docdir = homedir+"/Documents/"
 configdir = homedir+"/.config/quartz-browser/"
+
+def validUrl(url_str):
+    """ This checks if the url is valid. Used in GoTo() func"""
+    validurl = False
+    for each in ("http://", "https://", "ftp://", "ftps://", "file://"):
+        if url_str.startswith(each):
+            validurl = True
+    return validurl
+
 
 class MyCookieJar(QNetworkCookieJar):
     """ Reimplemented QNetworkCookieJar to get cookie import/export feature"""
@@ -78,11 +86,14 @@ class MyCookieJar(QNetworkCookieJar):
         if cookiesValue:
             cookiesList = QNetworkCookie.parseCookies(cookiesValue)
             self.setAllCookies(cookiesList)
+    def clearCookies(self):
+        self.setAllCookies([])
 
 class NetworkAccessManager(QNetworkAccessManager):
     def __init__(self, *args, **kwargs):
         super(NetworkAccessManager, self).__init__(*args, **kwargs)
         self.authenticationRequired.connect(self.provideAuthentication)
+        self.block_fonts = False
     def provideAuthentication(self, reply, auth):
         username = QInputDialog.getText(None, "Authentication", "Enter your username:", QLineEdit.Normal)
         if username[1]:
@@ -90,6 +101,25 @@ class NetworkAccessManager(QNetworkAccessManager):
             password = QInputDialog.getText(None, "Authentication", "Enter your password:", QLineEdit.Password)
             if password[1]:
                 auth.setPassword(password[0])
+    def createRequest(self, op, request, device=None):
+        """ Reimplemented to enable adblock/url-block """
+        url = request.url().toString()
+        block = False
+        for each in ['.ttf', '.woff']:
+            if url.endsWith(each):
+              block = True
+        if block and self.block_fonts and op==self.GetOperation:
+#            print "Blocked: "+url
+            return QNetworkAccessManager.createRequest(self, op, QNetworkRequest(QUrl()))
+
+#        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, 2)
+        return QNetworkAccessManager.createRequest(self, op, request, device)
+        """reply.metaDataChanged.connect(self.printdata)
+        return reply
+    def printdata(self):
+        ''' Prints raw Headers of requested url '''
+        reply = self.sender()
+        print(reply.rawHeader('Accept-Ranges'))"""
 
 # NetworkAccessManager must be global variable, otherwise cause rendering problem
 cookiejar = MyCookieJar(QApplication.instance())
@@ -166,10 +196,10 @@ class MyWebView(QWebView):
         if result.isContentSelected():
           menu.addAction(self.pageAction(QWebPage.Copy))
         if not result.imageUrl().isEmpty():
-          saveImage = QAction("Save Image", self)
-          saveImage.triggered.connect(self.saveImageToDisk)
-          menu.addAction(saveImage)
-          menu.addAction(self.pageAction(QWebPage.CopyImageUrlToClipboard))
+          menu.addAction("Save Image", self.saveImageToDisk)
+          download_image_action = self.pageAction(QWebPage.DownloadImageToDisk)
+          download_image_action.setText("Download Image")
+          menu.addAction(download_image_action)
           menu.addSeparator()
         if not result.linkUrl().isEmpty():
           menu.addAction(self.pageAction(QWebPage.OpenLinkInNewWindow))
@@ -177,29 +207,35 @@ class MyWebView(QWebView):
           menu.addAction(self.pageAction(QWebPage.CopyLinkToClipboard))
           menu.addAction(self.pageAction(QWebPage.DownloadLinkToDisk))
         menu.exec_(self.mapToGlobal(event.pos()))
-    def saveImageToDisk(self, checked):
+    def saveImageToDisk(self):
         """ This saves an image in page directly without downloading"""
         pm = self.page().mainFrame().hitTestContent(self.rel_pos).pixmap()
         url = self.page().mainFrame().hitTestContent(self.rel_pos).imageUrl()
+        url.setQueryItems([])
         name = QFileInfo(url.toString()).fileName()
         filepath = QFileDialog.getSaveFileName(self,
                                       "Select Image to Save", downloaddir + name,
                                       "Image Files (*.jpg *.png *.jpeg)" )
         if not filepath.isEmpty():
           if not (filepath.endsWith(".jpg",0) or filepath.endsWith(".png",0) or filepath.endsWith(".jpeg",0)):
-            filepath += ".png"
+            filepath += ".jpg"
           if pm.save(filepath):
             QMessageBox.information(None, "Successful !","Image has been successfully saved!")
 
 class QurlEdit(QLineEdit):
     """ Reimplemented QLineEdit to get all selected when double clicked"""
-#    mouseDoubleClicked = pyqtSignal()
+    downloadRequested = pyqtSignal(QNetworkRequest)
     def __init__(self, parent=None):
         super(QurlEdit, self).__init__(parent)
     def mouseDoubleClickEvent(self, event):
         self.selectAll()
-#        self.mouseDoubleClicked.emit()
-
+    def contextMenuEvent(self,event):
+        menu = self.createStandardContextMenu()
+        menu.addAction("Download Link", self.downloadLink)
+        menu.exec_(self.mapToGlobal(event.pos()))
+    def downloadLink(self):
+        request = QNetworkRequest(QUrl.fromUserInput(self.text()))
+        self.downloadRequested.emit(request)
 
 class Main(QMainWindow):
     def __init__(self): 
@@ -220,6 +256,14 @@ class Main(QMainWindow):
         self.websettings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
         self.websettings.setMaximumPagesInCache(10)
 #        self.websettings.setAttribute(QWebSettings.PrintElementBackgrounds, False)
+        self.downloads = []
+        self.dwnldsmodel = DownloadsModel(self.downloads, QApplication.instance())
+        imported_downloads = parseDownloads(configdir+"downloads.txt")
+        for [filepath, url, totalsize] in imported_downloads:
+            incomplt_download = Download(networkmanager)
+            incomplt_download.loadDownload(filepath, url, long(totalsize))
+            incomplt_download.datachanged.connect(self.dwnldsmodel.datachanged)
+            self.downloads.append(incomplt_download)
         self.history = []
         self.bookmarks = parsebookmarks(configdir+"bookmarks.txt")
         cookiejar.importCookies(self)
@@ -252,6 +296,9 @@ class Main(QMainWindow):
         self.websettingsaction.setShortcut("Ctrl+,")
         self.websettingsaction.triggered.connect(self.settingseditor)
 
+        self.downloadsaction = QAction("Downloads", self)
+        self.downloadsaction.triggered.connect(self.download_manager)
+
         self.saveasimageaction = QAction("Save as Image",self)
         self.saveasimageaction.setShortcut("Ctrl+Shift+S")
         self.saveasimageaction.triggered.connect(self.saveasimage)
@@ -280,6 +327,7 @@ class Main(QMainWindow):
         self.menu.addAction(self.websettingsaction)
         self.menu.addSeparator()
 
+        self.menu.addAction(self.downloadsaction)
         self.menu.addAction(self.saveasimageaction)
         self.menu.addAction(self.saveashtmlaction)
         self.menu.addAction(self.printaction)
@@ -382,10 +430,11 @@ class Main(QMainWindow):
                 self.bookmarkBtn, self.historyBtn, self.findBtn]):
             grid.addWidget(widget, 0,index,1,1)
         grid.addWidget(self.tabWidget, 2, 0, 1, 13)
-#---------Window settings --------------------------------
+#-----------------------Window settings --------------------------------
         self.setWindowIcon(QIcon(":/view-refresh.png")) 
         self.setWindowTitle("Quartz Browser")
-#        self.setStyleSheet("background-color:#ffffff;font-size:15px;") 
+#        self.line.setStyleSheet("background-image:url(:/search.png);background-repeat:no-repeat;\
+#                                padding: 2 2 2 24 ;font-size:15px;") 
 
 #   Must be at the end, otherwise cause segmentation fault
         self.status = self.statusBar() 
@@ -404,8 +453,9 @@ class Main(QMainWindow):
         tab.titlechanged.connect(self.onTitleChange)
         tab.page().linkHovered.connect(self.LinkHovered)
         tab.page().printRequested.connect(self.printpage)
+        self.line.downloadRequested.connect(self.download_requested_file)
         tab.page().downloadRequested.connect(self.download_requested_file)
-        tab.page().unsupportedContent.connect(self.download_file)
+        tab.page().unsupportedContent.connect(self.handleUnsupportedContent)
 
         self.tabWidget.addTab(tab, "( Untitled )")
         if self.tabWidget.count()==1:
@@ -436,16 +486,14 @@ class Main(QMainWindow):
         self.line.setText(url)
     def Enter(self): 
         url = str(self.line.text())
-        if ("://" not in url and "." not in url) or (" " in url): # If text is not valid url
-            url = "http://www.google.com/search?q="+url 
+        if validUrl(url):
+            self.GoTo(url)
+            return
+        if ( "." not in url) or (" " in url): # If text is not valid url
+            url = "https://www.google.com/search?q="+url 
         self.GoTo(url)
     def GoTo(self, url):
-        url = str(url)
-        validurl = False
-        for each in ("http://", "https://", "ftp://", "ftps://", "file://"):
-            if url.startswith(each):
-                validurl = True
-        if not validurl:
+        if not validUrl(str(url)): # This func returns true if url is valid
             url = "http://"+url
         self.tabWidget.currentWidget().load(QUrl(url))
         self.line.setText(url)
@@ -483,17 +531,35 @@ class Main(QMainWindow):
     def onProgress(self, progress, webview):
         if webview is self.tabWidget.currentWidget():
             self.pbar.setValue(progress)
-    def download_file(self, networkrequest=None):
-        url = str(networkrequest.url().toString())
-        Popen(["uget-gtk", url])
+
+##################### Downloading  ########################
     def download_requested_file(self, networkrequest):
-        filename = QFileInfo(networkrequest.url().path()).fileName()
-        filepath = QFileDialog.getSaveFileName(self,
-                                      "Enter FileName to Save", downloaddir+str(filename),
-                                      "All Files (*)" )
-        if not filepath.isEmpty():
-            self.newdownload = DownloadManager(networkmanager)
-            self.newdownload.download(networkrequest, filepath)
+        reply = networkmanager.get(networkrequest)
+        self.handleUnsupportedContent(reply)
+    def handleUnsupportedContent(self, reply):
+        """ This is called when url content is a downloadable file. e.g- pdf,mp3,mp4 """
+        if reply.rawHeaderList() == []:
+            loop = QEventLoop()
+            reply.metaDataChanged.connect(loop.quit)
+            loop.exec_()
+        confirmation = QMessageBox.question(self, "Download ?", "Are you sure to download the file ?",
+                                                QMessageBox.Yes|QMessageBox.No)
+        if confirmation==QMessageBox.Yes:
+            if self.useexternaldownloader:
+                download_externally(reply.url().toString(), self.externaldownloader)
+                reply.abort()
+                return
+            newdownload = Download(networkmanager)
+            newdownload.startDownload(reply)
+            newdownload.datachanged.connect(self.dwnldsmodel.datachanged)
+            self.downloads.insert(0, newdownload)
+        else:
+            reply.abort()
+    def download_manager(self):
+        dialog = QDialog(self)
+        downloads_dialog = Downloads_Dialog()
+        downloads_dialog.setupUi(dialog, self.dwnldsmodel)
+        dialog.exec_()
 
     def urlsuggestions(self, text):
         """ Creates the list of url suggestions for URL box """
@@ -520,12 +586,13 @@ class Main(QMainWindow):
             img = QPixmap(contentsize)
             painter = QPainter()
             painter.begin(img)
-            self.tabWidget.currentWidget().page().mainFrame().render(painter, QWebFrame.AllLayers)
+            self.tabWidget.currentWidget().page().mainFrame().render(painter, 0xff)# 0xff=QWebFrame.AllLayers
             painter.end()
-            img.save(filename)
+            if img.save(filename):
+                QMessageBox.information(None, "Successful !","Page has been successfully saved as "+filename)
             self.tabWidget.currentWidget().page().setViewportSize(viewportsize)
     def saveashtml(self):
-        """ Saves current page as HTML , bt does not saves any content"""
+        """ Saves current page as HTML , bt does not saves any content (e.g images)"""
         html = self.tabWidget.currentWidget().page().mainFrame().toHtml().toUtf8()
         filename = QFileDialog.getSaveFileName(self,
                                       "Enter HTML File Name", downloaddir + self.tabWidget.currentWidget().page().mainFrame().title()+".html",
@@ -539,7 +606,7 @@ class Main(QMainWindow):
         printer.setOutputFileName(docdir + self.tabWidget.currentWidget().page().mainFrame().title() + ".pdf")
         print_dialog = QPrintDialog(printer, self)
         if print_dialog.exec_() == QDialog.Accepted:
-          if page != 0:
+          if page:
             page.print_(printer)
           else:
             self.tabWidget.currentWidget().print_(printer)
@@ -551,7 +618,7 @@ class Main(QMainWindow):
         addbmkdialog.titleEdit.setText(self.tabWidget.currentWidget().page().mainFrame().title())
         addbmkdialog.addressEdit.setText(self.line.text())
         if (dialog.exec_() == QDialog.Accepted):
-            self.bookmarks.insert(0, [addbmkdialog.titleEdit.text().toUtf8(), addbmkdialog.addressEdit.text()])
+            self.bookmarks.insert(0, [str(addbmkdialog.titleEdit.text().toUtf8()), addbmkdialog.addressEdit.text()])
             self.status.showMessage("Bookmark has been Saved")
     def managebookmarks(self):
         dialog = QDialog(self)
@@ -565,7 +632,7 @@ class Main(QMainWindow):
         history_dialog = History_Dialog()
         history_dialog.setupUi(dialog, self.history)
         history_dialog.tableView.doubleclicked.connect(self.GoTo)
-        dialog.show()
+        dialog.exec_()
 
     def findmode(self):
         self.findmodeon = True
@@ -617,48 +684,69 @@ class Main(QMainWindow):
             self.javascriptenabledval = True
         else:
             self.javascriptenabledval = False
-
 ########################## Settings Portion #########################
     def settingseditor(self):  
         """ Opens the settings manager dialog, then applies the change"""
         dialog = QDialog(self)
-        websettingsdialog = Ui_Dialog()
+        websettingsdialog = Ui_SettingsDialog()
         websettingsdialog.setupUi(dialog)
         if self.loadimagesval:
             websettingsdialog.checkLoadImages.setChecked(True)
         if self.javascriptenabledval:
             websettingsdialog.checkJavascript.setChecked(True)
+        if networkmanager.block_fonts:
+            websettingsdialog.checkFontLoad.setChecked(True)
         if self.customuseragentval :
             websettingsdialog.checkUserAgent.setChecked(True)
         websettingsdialog.useragentEdit.setText(self.useragentval)
         if self.customhomepageurlval:
             websettingsdialog.checkHomePage.setChecked(True)
         websettingsdialog.homepageEdit.setText(self.homepageurlval)
+        websettingsdialog.homepageEdit.setCursorPosition(0)
+        if self.useexternaldownloader:
+            websettingsdialog.checkDownMan.setChecked(True)
+        websettingsdialog.downManEdit.setText(self.externaldownloader)
         websettingsdialog.spinFontSize.setValue(self.minfontsizeval)
         websettingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
         websettingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
         websettingsdialog.seriffontCombo.setCurrentFont(QFont(self.seriffontval))
         websettingsdialog.fixedfontCombo.setCurrentFont(QFont(self.fixedfontval))
+        websettingsdialog.cookiesButton.clicked.connect(cookiejar.clearCookies)
 
         if dialog.exec_() == QDialog.Accepted:
             if websettingsdialog.checkLoadImages.isChecked():
                 self.loadimagesval = True
             else:
                 self.loadimagesval = False
+            # JavaScript
             if websettingsdialog.checkJavascript.isChecked():
                 self.javascriptenabledval = True
             else:
                 self.javascriptenabledval = False
+            # Block Fonts
+            if websettingsdialog.checkFontLoad.isChecked():
+                networkmanager.block_fonts = True
+            else:
+                networkmanager.block_fonts = False
+            # User Agent
             if websettingsdialog.checkUserAgent.isChecked():
                 self.customuseragentval = True
             else:
                 self.customuseragentval = False
             self.useragentval = websettingsdialog.useragentEdit.text()
+            # Home Page
             if websettingsdialog.checkHomePage.isChecked():
                 self.customhomepageurlval = True
             else:
                 self.customhomepageurlval = False
             self.homepageurlval = websettingsdialog.homepageEdit.text()
+            # Download Manager
+            if websettingsdialog.checkDownMan.isChecked():
+                self.useexternaldownloader = True
+            else:
+                self.useexternaldownloader = False
+            self.externaldownloader = websettingsdialog.downManEdit.text()
+
             self.minfontsizeval = websettingsdialog.spinFontSize.value()
             self.standardfontval = websettingsdialog.standardfontCombo.currentText()
             self.sansfontval = websettingsdialog.sansfontCombo.currentText()
@@ -667,12 +755,16 @@ class Main(QMainWindow):
             self.applysettings()
     def defaultsettings(self): 
         """ This settings is used when settings can not be imported"""
+        print 'Reset Settings'
         self.loadimagesval = True
         self.javascriptenabledval = True
+        networkmanager.block_fonts = False
         self.customuseragentval = False
         self.useragentval = "Nokia 5130"
         self.customhomepageurlval = False
         self.homepageurlval = "file:///usr/share/doc/python-qt4-doc/html/classes.html"
+        self.useexternaldownloader = False
+        self.externaldownloader = ""
         self.minfontsizeval = 12
         self.standardfontval = "Sans"
         self.sansfontval = "Sans"
@@ -683,10 +775,13 @@ class Main(QMainWindow):
             saves values in settings variables"""
         self.loadimagesval = self.settings.value('LoadImages').toBool()
         self.javascriptenabledval = self.settings.value('JavaScriptEnabled').toBool()
+        networkmanager.block_fonts = self.settings.value('BlockFontLoading').toBool()
         self.customuseragentval = self.settings.value('CustomUserAgent').toBool()
         self.useragentval = self.settings.value('UserAgent').toString()
         self.customhomepageurlval = self.settings.value('CustomHomePageUrl').toBool()
         self.homepageurlval = self.settings.value('HomePageUrl').toString()
+        self.useexternaldownloader = self.settings.value('UseExternalDownloader').toBool()
+        self.externaldownloader = self.settings.value('ExternalDownloader').toString()
         self.minfontsizeval = int(self.settings.value('MinFontSize').toString())
         self.standardfontval = self.settings.value('StandardFont').toString()
         self.sansfontval = self.settings.value('SansFont').toString()
@@ -696,10 +791,13 @@ class Main(QMainWindow):
         """ Writes setings to disk in ~/.config/quartz-browser/ directory"""
         self.settings.setValue('LoadImages', self.loadimagesval)
         self.settings.setValue('JavaScriptEnabled', self.javascriptenabledval)
+        self.settings.setValue('BlockFontLoading', networkmanager.block_fonts)
         self.settings.setValue('CustomUserAgent', self.customuseragentval)
         self.settings.setValue('UserAgent', self.useragentval)
         self.settings.setValue('CustomHomePageUrl', self.customhomepageurlval)
         self.settings.setValue('HomePageUrl', self.homepageurlval)
+        self.settings.setValue('UseExternalDownloader', self.useexternaldownloader)
+        self.settings.setValue('ExternalDownloader', self.externaldownloader)
         self.settings.setValue('MinFontSize', self.minfontsizeval)
         self.settings.setValue('StandardFont', self.standardfontval)
         self.settings.setValue('SansFont', self.sansfontval)
@@ -736,12 +834,22 @@ class Main(QMainWindow):
         """This saves all settings, bookmarks, cookies etc. during window close"""
         self.savesettings()
         writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
+        writeDownloads(configdir+"downloads.txt", self.downloads)
         cookiesArray = QByteArray()
         cookieList = cookiejar.allCookies()
         for cookie in cookieList:
             cookiesArray.append( cookie.toRawForm() + "\n" )
         self.settings.setValue("cookies", cookiesArray)
         return super(Main, self).closeEvent(event)
+
+def download_externally(url, downloader):
+    """ Runs External downloader """
+    if "%u" not in str(url):
+        print "External downloader command must contain %u in place of URL"
+        return
+    cmd = str(downloader).replace("%u", str(url))
+    cmd = shlex.split(cmd)
+    return Popen(cmd)
 
 
 

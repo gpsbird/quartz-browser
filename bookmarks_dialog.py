@@ -47,9 +47,10 @@ class BookmarksTable(QtGui.QTableWidget):
         self.doubleclicked.emit(url)
     def contextMenuEvent(self, e):
         self.rel_pos = e.pos()
+        offset = QtCore.QPoint(self.verticalHeader().width()+3,self.horizontalHeader().height()+3)
         menu = QtGui.QMenu(self)
         menu.addAction("Delete", self.deleteitem)
-        menu.exec_(self.mapToGlobal(self.rel_pos))
+        menu.exec_(self.mapToGlobal(self.rel_pos+offset))
     def deleteitem(self):
         del self.data[self.rowAt(self.rel_pos.y())]
         self.removeRow(self.rowAt(self.rel_pos.y()))
