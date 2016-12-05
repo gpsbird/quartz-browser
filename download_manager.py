@@ -18,12 +18,7 @@ class Download(QtCore.QObject):
         self.loadedsize = 0
         self.progress = '- - -'
     def startDownload(self, networkreply):
-        if networkreply.hasRawHeader('Location'):
-            url = QtCore.QUrl(str(networkreply.rawHeader('Location')))
-            networkreply.abort()
-            self.download = self.nam.get(QtNetwork.QNetworkRequest(url))
-        else:
-            self.download = networkreply
+        self.download = networkreply
         decoded_url = QtCore.QUrl.fromPercentEncoding(self.download.url().path().toUtf8())
         self.filename = QtCore.QFileInfo(decoded_url).fileName()
         self.updateMetaData()
@@ -36,7 +31,7 @@ class Download(QtCore.QObject):
         self.download.metaDataChanged.connect(self.updateMetaData)
         self.download.readyRead.connect(self.dataReceived)
         self.download.finished.connect(self.downloadStopped)
-#        self.download.error.connect(self.downloadfailed)
+        self.download.error.connect(self.downloadfailed)
     def loadDownload(self, filepath, url, size):
         self.filepath = filepath
         self.url = url
@@ -81,9 +76,9 @@ class Download(QtCore.QObject):
 
     def downloadfailed(self, error): # error = 5 if cancelled
         """ at download error """
-        if (error==5) or (self.loadedsize == self.totalsize) or (self.support_resume==False):
+        if (error==5):
             return
-        print str(error)
+        QtGui.QMessageBox.warning(None, "Download Stopped !","Download has suddenly stopped.\n You may try again\n Error : "+str(error))
 
     def updateMetaData(self):
         if self.download.hasRawHeader('Location'):
@@ -99,8 +94,6 @@ class Download(QtCore.QObject):
         content_name = str(self.download.rawHeader('Content-Disposition'))
         if content_name.startswith('attachment'):
             self.filename = content_name.split('=')[-1]
-        for (title, header) in self.download.rawHeaderPairs():
-            print title, header
 
     def saveToDisk(self):
         try:

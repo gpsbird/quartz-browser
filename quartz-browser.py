@@ -35,8 +35,9 @@ Last Update :
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # TODO : 
-#        Auto complete username password
-#        change search engine
+#       Auto complete username password
+#       change search engine
+#       Download file size will be shown in both kB/MB as suitable.
 
 import sys, shlex
 from os.path import abspath, exists
@@ -45,7 +46,7 @@ from subprocess import Popen
 from time import strftime
 
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize
-from PyQt4.QtCore import QFileInfo, QByteArray, QEventLoop
+from PyQt4.QtCore import QFileInfo, QByteArray, QEventLoop, QTimer
 
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
@@ -541,7 +542,10 @@ class Main(QMainWindow):
         if reply.rawHeaderList() == []:
             loop = QEventLoop()
             reply.metaDataChanged.connect(loop.quit)
+            QTimer.singleShot(30000, loop.quit)
             loop.exec_()
+        for (title, header) in reply.rawHeaderPairs():
+            print title, header
         confirmation = QMessageBox.question(self, "Download ?", "Are you sure to download the file ?",
                                                 QMessageBox.Yes|QMessageBox.No)
         if confirmation==QMessageBox.Yes:
@@ -549,6 +553,11 @@ class Main(QMainWindow):
                 download_externally(reply.url().toString(), self.externaldownloader)
                 reply.abort()
                 return
+            if reply.hasRawHeader('Location'):
+                url = QUrl(str(reply.rawHeader('Location')))
+                reply.abort()
+                reply = networkmanager.get(QNetworkRequest(url))
+
             newdownload = Download(networkmanager)
             newdownload.startDownload(reply)
             newdownload.datachanged.connect(self.dwnldsmodel.datachanged)
@@ -844,12 +853,15 @@ class Main(QMainWindow):
 
 def download_externally(url, downloader):
     """ Runs External downloader """
-    if "%u" not in str(url):
+    if "%u" not in str(downloader):
         print "External downloader command must contain %u in place of URL"
         return
     cmd = str(downloader).replace("%u", str(url))
     cmd = shlex.split(cmd)
-    return Popen(cmd)
+    try:
+        Popen(cmd)
+    except OSError:
+        print "Error : Downloader command not found"
 
 
 
