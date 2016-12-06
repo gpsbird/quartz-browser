@@ -1,7 +1,6 @@
 # Quartz Browser
 A useful fast lightweight Web Browser written in pyqt4
 
-**Version** = 1.7  
 **Dependency** = python-qt4  
 
 ### Download
@@ -16,7 +15,7 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
  $ *quartz.py http://www.google.com*  
  
  
-#### Features :  
+### Features :  
  1. Unified Search/Url Bar  
  2. Turn Javascript, Load Images on/off  
  3. Find Text inside page  
