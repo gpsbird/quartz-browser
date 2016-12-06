@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 
-import sys
 from PyQt4 import QtCore, QtGui, QtNetwork
-from os import environ
-homedir = environ['HOME']
-downloaddir = homedir+"/Downloads/"
 
 _fromUtf8 = QtCore.QString.fromUtf8
 
@@ -17,10 +13,10 @@ class Download(QtCore.QObject):
         self.totalsize = 0
         self.loadedsize = 0
         self.progress = '- - -'
-    def startDownload(self, networkreply):
+    def startDownload(self, networkreply, filepath):
         self.download = networkreply
-        decoded_url = QtCore.QUrl.fromPercentEncoding(self.download.url().path().toUtf8())
-        self.filename = QtCore.QFileInfo(decoded_url).fileName()
+        self.filepath = filepath
+        self.filename = QtCore.QFileInfo(self.filepath).fileName()
         self.updateMetaData()
         if self.download.isFinished():
             self.dataReceived()
@@ -67,9 +63,6 @@ class Download(QtCore.QObject):
         request = QtNetwork.QNetworkRequest(QtCore.QUrl(self.url))
         if self.support_resume:
             request.setRawHeader('Range', 'bytes={}-'.format(self.loadedsize) )
-        try:
-            self.download.deleteLater()
-        except: pass
         self.download = self.nam.get(request)
         self.connect_signals()
         print 'Retry: '+self.url
@@ -91,24 +84,14 @@ class Download(QtCore.QObject):
             self.support_resume = True
         else:
             self.support_resume = False
-        content_name = str(self.download.rawHeader('Content-Disposition'))
-        if content_name.startswith('attachment'):
-            self.filename = content_name.split('=')[-1]
 
     def saveToDisk(self):
-        try:
-            if self.filepath == '': raise AttributeError
-        except AttributeError:
-            self.filepath = QtGui.QFileDialog.getSaveFileName(None,
-                                      "Enter FileName to Save", downloaddir+str(self.filename),
-                                      "All Files (*)" )
-        if self.filepath != '':
-            output = QtCore.QFile( self.filepath )
-            output.open(QtCore.QIODevice.WriteOnly)
-            output.write( self.downloadBuffer)
-            output.close()
-            self.filename = QtCore.QFileInfo(self.filepath).fileName()
+        output = QtCore.QFile( self.filepath )
+        output.open(QtCore.QIODevice.WriteOnly)
+        output.write( self.downloadBuffer)
+        output.close()
         self.downloadBuffer.clear()
+        self.download.deleteLater()
 
 class DownloadsModel(QtCore.QAbstractTableModel):
     def __init__(self, downloadlist, parent=None):
@@ -165,14 +148,9 @@ class DownloadsTable(QtGui.QTableView):
               menu.addAction("Restart", self.pause_resume)
         else:
             menu.addAction("Pause", self.pause_resume)
-        menu.addAction("Save to Disk", self.save_download)
+        menu.addAction("Copy Address", self.copy_address)
         menu.addAction("Mark as Complete", self.mark_complete)
         menu.exec_(self.mapToGlobal(self.rel_pos + offset))
-    def save_download(self):
-        if self.model().downloadlist[self.rowClicked].progress != '- - -':
-            self.model().downloadlist[self.rowClicked].download.abort()
-            return
-        self.model().downloadlist[self.rowClicked].saveToDisk()
     def pause_resume(self):
         if self.model().downloadlist[self.rowClicked].progress == '- - -':
             self.model().downloadlist[self.rowClicked].retry()
@@ -180,6 +158,9 @@ class DownloadsTable(QtGui.QTableView):
             self.model().downloadlist[self.rowClicked].download.abort()
     def mark_complete(self):
         self.model().downloadlist[self.rowClicked].complete = True
+    def copy_address(self):
+        clipboard = QtGui.QApplication.clipboard()
+        clipboard.setText(self.model().downloadlist[self.rowClicked].url)
 
 class Downloads_Dialog(object):
     def setupUi(self, Dialog, mymodel):

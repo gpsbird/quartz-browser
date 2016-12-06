@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.7-beta
+version = 1.7.2
 Dependency = python-qt4
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
@@ -13,6 +13,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Added copy download link option
             Added font blocker settings
             Added clear cookies option
             Google search address was changed to https
@@ -35,8 +36,7 @@ Last Update :
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # TODO : 
-#       Auto complete username password
-#       change search engine
+#       multiple search engines
 #       Download file size will be shown in both kB/MB as suitable.
 
 import sys, shlex
@@ -52,7 +52,10 @@ from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileD
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
 from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QProgressBar, QMessageBox, QInputDialog
 from PyQt4.QtGui import QPainter, QPixmap, QFont, QTabWidget
-
+"""
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
+"""
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCookie, QNetworkRequest
 
@@ -204,7 +207,6 @@ class MyWebView(QWebView):
           menu.addSeparator()
         if not result.linkUrl().isEmpty():
           menu.addAction(self.pageAction(QWebPage.OpenLinkInNewWindow))
-#          menu.addAction(self.pageAction(QWebPage.OpenLink))
           menu.addAction(self.pageAction(QWebPage.CopyLinkToClipboard))
           menu.addAction(self.pageAction(QWebPage.DownloadLinkToDisk))
         menu.exec_(self.mapToGlobal(event.pos()))
@@ -244,6 +246,7 @@ class Main(QMainWindow):
         if not exists(configdir):
             mkdir(configdir)
         # Import Settings
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.settings = QSettings("quartz-browser","quartz")
         haveallsettings = True
         for key in ['LoadImages', 'JavaScriptEnabled', 'CustomUserAgent', 'UserAgent', 'CustomHomePageUrl', 'HomePageUrl',
@@ -546,9 +549,19 @@ class Main(QMainWindow):
             loop.exec_()
         for (title, header) in reply.rawHeaderPairs():
             print title, header
-        confirmation = QMessageBox.question(self, "Download ?", "Are you sure to download the file ?",
-                                                QMessageBox.Yes|QMessageBox.No)
-        if confirmation==QMessageBox.Yes:
+        content_name = str(reply.rawHeader('Content-Disposition'))
+        if content_name.startswith('attachment'):
+            filename = content_name.split('=')[-1]
+        else:
+            if reply.hasRawHeader('Location'):
+                decoded_url = QUrl.fromPercentEncoding(str(reply.rawHeader('Location')))
+            else:
+                decoded_url = QUrl.fromPercentEncoding(str(reply.url().toString()))
+            filename = QFileInfo(decoded_url).fileName()
+        filepath = QFileDialog.getSaveFileName(self,
+                                  "Download File", downloaddir+str(filename),
+                                  "All Files (*)" )
+        if not filepath.isEmpty():
             if self.useexternaldownloader:
                 download_externally(reply.url().toString(), self.externaldownloader)
                 reply.abort()
@@ -559,7 +572,7 @@ class Main(QMainWindow):
                 reply = networkmanager.get(QNetworkRequest(url))
 
             newdownload = Download(networkmanager)
-            newdownload.startDownload(reply)
+            newdownload.startDownload(reply, filepath)
             newdownload.datachanged.connect(self.dwnldsmodel.datachanged)
             self.downloads.insert(0, newdownload)
         else:
