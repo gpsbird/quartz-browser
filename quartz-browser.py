@@ -13,12 +13,11 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-            Added copy download link option
-            Added font blocker settings
-            Added clear cookies option
-            Google search address was changed to https
-            Fixed url/search prediction error or url with space
-            GUI downloadmanager with pause/resume support
+            Window is shrinkable
+            Added maximize on startup option.
+            progressbar is narrow and its length is same as page width.
+            Removed statusbar
+            Bookmarks dialog width increased.
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -37,7 +36,7 @@ Last Update :
 """
 # TODO : 
 #       multiple search engines
-#       Download file size will be shown in both kB/MB as suitable.
+#       About/Help dialog
 
 import sys, shlex
 from os.path import abspath, exists
@@ -45,12 +44,12 @@ from os import environ, mkdir
 from subprocess import Popen
 from time import strftime
 
-from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize
+from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize, QPoint
 from PyQt4.QtCore import QFileInfo, QByteArray, QEventLoop, QTimer
 
 from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileDialog, QDialog, QStringListModel, QListView
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
-from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QProgressBar, QMessageBox, QInputDialog
+from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QProgressBar, QMessageBox, QInputDialog, QLabel
 from PyQt4.QtGui import QPainter, QPixmap, QFont, QTabWidget
 """
 from PyQt4.QtCore import *
@@ -125,10 +124,6 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply = self.sender()
         print(reply.rawHeader('Accept-Ranges'))"""
 
-# NetworkAccessManager must be global variable, otherwise cause rendering problem
-cookiejar = MyCookieJar(QApplication.instance())
-networkmanager = NetworkAccessManager(QApplication.instance())
-networkmanager.setCookieJar(cookiejar)
 
 class MyWebPage(QWebPage):
     """Reimplemented QWebPage to get User Agent Changing and multiple file uploads facility"""
@@ -164,9 +159,9 @@ class MyWebView(QWebView):
     def __init__(self, parent=None):
         QWebView.__init__(self, parent)
         self.setPage(MyWebPage())
+        self.edit_mode_on = False
         self.loading = False
         self.progressVal = 0
-        self.setMinimumSize(1024,624)
         self.loadStarted.connect(self.loadstarted)
         self.loadFinished.connect(self.loadfinished)
         self.loadProgress.connect(self.loadprogress)
@@ -209,6 +204,12 @@ class MyWebView(QWebView):
           menu.addAction(self.pageAction(QWebPage.OpenLinkInNewWindow))
           menu.addAction(self.pageAction(QWebPage.CopyLinkToClipboard))
           menu.addAction(self.pageAction(QWebPage.DownloadLinkToDisk))
+        if result.imageUrl().isEmpty() and result.linkUrl().isEmpty():
+          edit_page_action = QAction("Edit Page", self)
+          edit_page_action.setCheckable(True)
+          edit_page_action.setChecked(self.edit_mode_on)
+          edit_page_action.triggered.connect(self.toggleEditMode)
+          menu.addAction(edit_page_action)
         menu.exec_(self.mapToGlobal(event.pos()))
     def saveImageToDisk(self):
         """ This saves an image in page directly without downloading"""
@@ -224,6 +225,13 @@ class MyWebView(QWebView):
             filepath += ".jpg"
           if pm.save(filepath):
             QMessageBox.information(None, "Successful !","Image has been successfully saved!")
+    def toggleEditMode(self, checked):
+        if checked:
+            self.page().setContentEditable(True)
+            self.edit_mode_on = True
+        else:
+            self.page().setContentEditable(False)
+            self.edit_mode_on = False
 
 class QurlEdit(QLineEdit):
     """ Reimplemented QLineEdit to get all selected when double clicked"""
@@ -234,6 +242,7 @@ class QurlEdit(QLineEdit):
         self.selectAll()
     def contextMenuEvent(self,event):
         menu = self.createStandardContextMenu()
+        menu.addSeparator()
         menu.addAction("Download Link", self.downloadLink)
         menu.exec_(self.mapToGlobal(event.pos()))
     def downloadLink(self):
@@ -273,6 +282,7 @@ class Main(QMainWindow):
         cookiejar.importCookies(self)
         self.findmodeon = False
         self.initUI()
+        self.resize(1024,714)
 
     def initUI(self):
 ###############################  Create  Actions ##############################
@@ -335,13 +345,14 @@ class Main(QMainWindow):
         self.menu.addAction(self.saveasimageaction)
         self.menu.addAction(self.saveashtmlaction)
         self.menu.addAction(self.printaction)
+        self.menu.addSeparator()
         self.menu.addAction(self.quitaction)
 
 
 ###############################  Create Gui Parts ##############################
         grid = QGridLayout()
         grid.setSpacing(2)
-        grid.setContentsMargins(2,2,2,2)
+        grid.setContentsMargins(0,2,0,0)
         self.centralwidget = QWidget(self)
         self.centralwidget.setLayout(grid)
         self.setCentralWidget(self.centralwidget)
@@ -415,8 +426,15 @@ class Main(QMainWindow):
         self.line.setCompleter(self.completer)
 
         self.pbar = QProgressBar() 
-        self.pbar.setMaximumWidth(480)
+        self.pbar.setTextVisible(False)
+        self.pbar.setMaximumHeight(5)
+        self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #7e83a6; }")
         self.pbar.hide()
+
+        self.statusbar = QLabel(self)
+        self.statusbar.setStyleSheet("QLabel { font-size: 12px; border-radius: 2px; padding: 2px; background: palette(highlight); color: palette(highlighted-text); }")
+        self.statusbar.setMaximumHeight(16)
+        self.statusbar.hide()
 
         self.tabWidget = QTabWidget(self)
 #        self.tabWidget.setMovable(True)
@@ -433,6 +451,7 @@ class Main(QMainWindow):
                 self.findprev, self.cancelfind, self.addbookmarkBtn, self.menuBtn,
                 self.bookmarkBtn, self.historyBtn, self.findBtn]):
             grid.addWidget(widget, 0,index,1,1)
+        grid.addWidget(self.pbar, 3,0,1,13)
         grid.addWidget(self.tabWidget, 2, 0, 1, 13)
 #-----------------------Window settings --------------------------------
         self.setWindowIcon(QIcon(":/view-refresh.png")) 
@@ -440,10 +459,9 @@ class Main(QMainWindow):
 #        self.line.setStyleSheet("background-image:url(:/search.png);background-repeat:no-repeat;\
 #                                padding: 2 2 2 24 ;font-size:15px;") 
 
-#   Must be at the end, otherwise cause segmentation fault
-        self.status = self.statusBar() 
-        self.status.setMaximumHeight(18)
-        self.status.addPermanentWidget(self.pbar) 
+#        Must be at the end, otherwise cause segmentation fault
+#       self.status = self.statusBar() 
+
     def addTab(self, tab=None):
         """ Creates a new tab and add to QTableWidget
             applysettings() must be called after adding each tab"""
@@ -455,11 +473,11 @@ class Main(QMainWindow):
         tab.loadingProgress.connect(self.onProgress)
         tab.urlchanged.connect(self.onUrlChange)
         tab.titlechanged.connect(self.onTitleChange)
-        tab.page().linkHovered.connect(self.LinkHovered)
         tab.page().printRequested.connect(self.printpage)
         self.line.downloadRequested.connect(self.download_requested_file)
         tab.page().downloadRequested.connect(self.download_requested_file)
         tab.page().unsupportedContent.connect(self.handleUnsupportedContent)
+        tab.page().linkHovered.connect(self.onLinkHover)
 
         self.tabWidget.addTab(tab, "( Untitled )")
         if self.tabWidget.count()==1:
@@ -522,8 +540,6 @@ class Main(QMainWindow):
         index = self.tabWidget.indexOf(webview)
         if not title.isEmpty():
             self.tabWidget.tabBar().setTabText(index, title)
-    def LinkHovered(self,l): 
-        self.status.showMessage(l)
     def startedloading(self, webview=None):
         if self.tabWidget.currentWidget().loading == True:
           self.reload.setIcon(QIcon(":/stop.png"))
@@ -535,6 +551,16 @@ class Main(QMainWindow):
     def onProgress(self, progress, webview):
         if webview is self.tabWidget.currentWidget():
             self.pbar.setValue(progress)
+    def onLinkHover(self, url):
+        if url=="":
+            self.statusbar.hide()
+#            self.repaint()
+            return
+        self.statusbar.setText(url)
+        self.statusbar.adjustSize()
+        self.statusbar.show()
+        self.statusbar.move(QPoint(0, self.height()-self.statusbar.height()))
+#        self.repaint()
 
 ##################### Downloading  ########################
     def download_requested_file(self, networkrequest):
@@ -611,7 +637,7 @@ class Main(QMainWindow):
             self.tabWidget.currentWidget().page().mainFrame().render(painter, 0xff)# 0xff=QWebFrame.AllLayers
             painter.end()
             if img.save(filename):
-                QMessageBox.information(None, "Successful !","Page has been successfully saved as "+filename)
+                Popen(["notify-send","Successful !","Page has been successfully saved as\n"+filename])
             self.tabWidget.currentWidget().page().setViewportSize(viewportsize)
     def saveashtml(self):
         """ Saves current page as HTML , bt does not saves any content (e.g images)"""
@@ -641,7 +667,6 @@ class Main(QMainWindow):
         addbmkdialog.addressEdit.setText(self.line.text())
         if (dialog.exec_() == QDialog.Accepted):
             self.bookmarks.insert(0, [str(addbmkdialog.titleEdit.text().toUtf8()), addbmkdialog.addressEdit.text()])
-            self.status.showMessage("Bookmark has been Saved")
     def managebookmarks(self):
         dialog = QDialog(self)
         bmk_dialog = Bookmarks_Dialog()
@@ -728,6 +753,8 @@ class Main(QMainWindow):
         if self.useexternaldownloader:
             websettingsdialog.checkDownMan.setChecked(True)
         websettingsdialog.downManEdit.setText(self.externaldownloader)
+        if self.maximizeonstartup:
+            websettingsdialog.checkMaximize.setChecked(True)
         websettingsdialog.spinFontSize.setValue(self.minfontsizeval)
         websettingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
         websettingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
@@ -768,6 +795,11 @@ class Main(QMainWindow):
             else:
                 self.useexternaldownloader = False
             self.externaldownloader = websettingsdialog.downManEdit.text()
+            # Maximize on startup
+            if websettingsdialog.checkMaximize.isChecked():
+                self.maximizeonstartup = True
+            else:
+                self.maximizeonstartup = False
 
             self.minfontsizeval = websettingsdialog.spinFontSize.value()
             self.standardfontval = websettingsdialog.standardfontCombo.currentText()
@@ -787,6 +819,7 @@ class Main(QMainWindow):
         self.homepageurlval = "file:///usr/share/doc/python-qt4-doc/html/classes.html"
         self.useexternaldownloader = False
         self.externaldownloader = ""
+        self.maximizeonstartup = False
         self.minfontsizeval = 12
         self.standardfontval = "Sans"
         self.sansfontval = "Sans"
@@ -804,6 +837,7 @@ class Main(QMainWindow):
         self.homepageurlval = self.settings.value('HomePageUrl').toString()
         self.useexternaldownloader = self.settings.value('UseExternalDownloader').toBool()
         self.externaldownloader = self.settings.value('ExternalDownloader').toString()
+        self.maximizeonstartup = self.settings.value('MaximizeOnStartup').toBool()
         self.minfontsizeval = int(self.settings.value('MinFontSize').toString())
         self.standardfontval = self.settings.value('StandardFont').toString()
         self.sansfontval = self.settings.value('SansFont').toString()
@@ -820,6 +854,7 @@ class Main(QMainWindow):
         self.settings.setValue('HomePageUrl', self.homepageurlval)
         self.settings.setValue('UseExternalDownloader', self.useexternaldownloader)
         self.settings.setValue('ExternalDownloader', self.externaldownloader)
+        self.settings.setValue('MaximizeOnStartup', self.maximizeonstartup)
         self.settings.setValue('MinFontSize', self.minfontsizeval)
         self.settings.setValue('StandardFont', self.standardfontval)
         self.settings.setValue('SansFont', self.sansfontval)
@@ -874,7 +909,7 @@ def download_externally(url, downloader):
     try:
         Popen(cmd)
     except OSError:
-        print "Error : Downloader command not found"
+        Popen(["notify-send", "Download Error", "Downloader command not found"])
 
 
 
@@ -882,15 +917,24 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setOrganizationName("quartz-browser")
     app.setApplicationName("quartz")
-    main= Main() 
-    main.show()
+    # NetworkAccessManager must be global variable, otherwise cause rendering problem
+    cookiejar = MyCookieJar(QApplication.instance())
+    networkmanager = NetworkAccessManager(QApplication.instance())
+    networkmanager.setCookieJar(cookiejar)
+    main= Main()
+    # Maximize after startup or Show normal 
+    if main.maximizeonstartup:
+        main.showMaximized()
+    else:
+        main.show()
+    # Go to url from argument
     if len(sys.argv)> 1:
         if sys.argv[1].startswith("/"):
             url = "file://"+sys.argv[1]
         else:
             url = sys.argv[1]
         main.GoTo(url)
-
     else:
         main.GoTo(main.homepageurl)
+    # App mainloop
     sys.exit(app.exec_())

@@ -44,8 +44,7 @@ def parseDownloads(filename):
 def writeDownloads(filepath, downloads):
     dl_text = ''
     for download in downloads:
-        if download.complete==False:
-            dl_text = dl_text+download.filepath+'\n'+download.url+'\n'+str(download.totalsize)+'\n'
+        dl_text = dl_text+download.filepath+'\n'+download.url+'\n'+str(download.totalsize)+'\n'
     dl_file = open(filepath, 'w')
     dl_file.write(dl_text)
     dl_file.close()

@@ -31,7 +31,8 @@ class BookmarksTable(QtGui.QTableWidget):
     def __init__(self, bookmark_list):
         QtGui.QTableWidget.__init__(self, len(bookmark_list), 2)
         self.setHorizontalHeaderLabels(["Title", "Address"])
-        self.horizontalHeader().setDefaultSectionSize(240)
+#        self.horizontalHeader().setDefaultSectionSize(240)
+        self.horizontalHeader().setResizeMode(0, QtGui.QHeaderView.Stretch)
         self.horizontalHeader().setResizeMode(1, QtGui.QHeaderView.Stretch)
         self.data = bookmark_list[:]
         self.setmydata()
@@ -59,7 +60,7 @@ class BookmarksTable(QtGui.QTableWidget):
 class Bookmarks_Dialog(object):
     def setupUi(self, Dialog, bookmark_data):
         Dialog.setObjectName(_fromUtf8("Dialog"))
-        Dialog.resize(740, 440)
+        Dialog.resize(900, 440)
         self.verticalLayout = QtGui.QVBoxLayout(Dialog)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.tableView = BookmarksTable(bookmark_data)

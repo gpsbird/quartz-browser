@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from subprocess import Popen
 from PyQt4 import QtCore, QtGui, QtNetwork
 
 _fromUtf8 = QtCore.QString.fromUtf8
@@ -34,7 +35,6 @@ class Download(QtCore.QObject):
         self.totalsize = size
         self.support_resume = True
         self.filename = QtCore.QFileInfo(self.filepath).fileName()
-        self.complete = False
     def dataReceived(self):
         self.downloadBuffer += self.download.readAll()
         self.loadedsize = self.downloadBuffer.size()
@@ -47,11 +47,10 @@ class Download(QtCore.QObject):
     def downloadStopped(self):
         """ Auto save when stops"""
         self.progress = "- - -"
-        if (self.loadedsize == self.totalsize) or (self.support_resume==False):
-            self.complete = True
-        else:
-            self.complete = False
         self.saveToDisk()
+        if self.loadedsize==self.totalsize:
+            try: Popen(["notify-send", 'Download Complete', "The download has completed successfully"])
+            except: print("Install libnotify-bin to enable system notification support")
 
     def retry(self):
         if self.support_resume:
@@ -94,6 +93,7 @@ class Download(QtCore.QObject):
         self.download.deleteLater()
 
 class DownloadsModel(QtCore.QAbstractTableModel):
+    updateRequested = QtCore.pyqtSignal()
     def __init__(self, downloadlist, parent=None):
         super(DownloadsModel, self).__init__(parent)
         self.headers = ["File Name", "Loaded Size", "Total Size", "Progress"]
@@ -109,9 +109,9 @@ class DownloadsModel(QtCore.QAbstractTableModel):
           if col==0:
             return "{}".format(self.downloadlist[row].filename)
           elif col==1:
-            return "{}k".format(self.downloadlist[row].loadedsize/1024)
+            return self.formatFileSize(self.downloadlist[row].loadedsize)
           elif col==2:
-            return "{}k".format(self.downloadlist[row].totalsize/1024)
+            return self.formatFileSize(self.downloadlist[row].totalsize)
           elif col==3:
             return self.downloadlist[row].progress
         elif role==QtCore.Qt.TextAlignmentRole:
@@ -125,46 +125,68 @@ class DownloadsModel(QtCore.QAbstractTableModel):
     def datachanged(self, download):
         updatedrow = self.downloadlist.index(download)
         self.dataChanged.emit(self.index(updatedrow,0), self.index(updatedrow,3) )
+    def formatFileSize(self, filesize):
+        if len(str(filesize))>7:
+            filesize = "{}M".format(round(float(filesize)/1048576, 2))
+        else:
+            filesize = "{}k".format(filesize/1024)
+        return filesize
+    def removeDownloads(self, selected_rows):
+        for row in selected_rows:
+          if self.downloadlist[row].progress != '- - -':
+            self.downloadlist[row].download.abort()
+          self.downloadlist.pop(row-selected_rows.index(row)).deleteLater()
+        self.updateRequested.emit()
 
 class DownloadsTable(QtGui.QTableView):
     def __init__(self, model,parent = None):
         QtGui.QTableWidget.__init__(self, parent)
         self.setModel(model)
         model.dataChanged.connect(self.dataChanged)
+        model.updateRequested.connect(self.update)
         self.horizontalHeader().setDefaultSectionSize(120)
         self.horizontalHeader().setResizeMode(0, QtGui.QHeaderView.Stretch)
     def mousePressEvent(self, e):
-        self.selectRow(self.rowAt(e.pos().y()))
+        if e.button()==0x00000001:# Qt.LeftMouseButton
+            self.selectRow(self.rowAt(e.pos().y()))
+        if e.button()==0x00000002 and len(self.selectedIndexes())<8:
+            self.selectRow(self.rowAt(e.pos().y()))
     def contextMenuEvent(self, e):
         self.rel_pos = e.pos()
         self.rowClicked = self.rowAt(self.rel_pos.y())
         if self.rowClicked == -1: return
         offset = QtCore.QPoint(self.verticalHeader().width()+3,self.horizontalHeader().height()+3)
         menu = QtGui.QMenu(self)
-        if self.model().downloadlist[self.rowClicked].progress == '- - -':
-            if self.model().downloadlist[self.rowClicked].support_resume:
-              menu.addAction("Resume", self.pause_resume)
+        if len(self.selectedIndexes())==4:
+            if self.model().downloadlist[self.rowClicked].progress == '- - -':
+                if self.model().downloadlist[self.rowClicked].support_resume:
+                  menu.addAction("Resume", self.pause_resume)
+                else:
+                  menu.addAction("Restart", self.pause_resume)
             else:
-              menu.addAction("Restart", self.pause_resume)
-        else:
-            menu.addAction("Pause", self.pause_resume)
-        menu.addAction("Copy Address", self.copy_address)
-        menu.addAction("Mark as Complete", self.mark_complete)
+                menu.addAction("Pause", self.pause_resume)
+            menu.addAction("Copy Address", self.copy_address)
+        menu.addAction("Remove Download", self.remove_selected)
         menu.exec_(self.mapToGlobal(self.rel_pos + offset))
     def pause_resume(self):
         if self.model().downloadlist[self.rowClicked].progress == '- - -':
             self.model().downloadlist[self.rowClicked].retry()
         else:
             self.model().downloadlist[self.rowClicked].download.abort()
-    def mark_complete(self):
-        self.model().downloadlist[self.rowClicked].complete = True
     def copy_address(self):
         clipboard = QtGui.QApplication.clipboard()
         clipboard.setText(self.model().downloadlist[self.rowClicked].url)
+    def remove_selected(self):
+        selected_rows = []
+        for index in self.selectedIndexes():
+            row = index.row()
+            if row not in selected_rows:
+                selected_rows.append(row)
+        self.model().removeDownloads(selected_rows)
 
 class Downloads_Dialog(object):
     def setupUi(self, Dialog, mymodel):
-        Dialog.setObjectName(_fromUtf8("Dialog"))
+        Dialog.setObjectName(_fromUtf8("Downloads_Dialog"))
         Dialog.resize(740, 440)
         self.verticalLayout = QtGui.QVBoxLayout(Dialog)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
