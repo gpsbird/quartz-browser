@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Name = Quartz Browser
-version = 1.7.2
-Dependency = python-qt4
+version = 1.8.3
+Dependency = python-qt4, libnotify-bin
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
             Print Page to PDF
@@ -13,11 +14,9 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-            Window is shrinkable
-            Added maximize on startup option.
-            progressbar is narrow and its length is same as page width.
-            Removed statusbar
-            Bookmarks dialog width increased.
+            Bug fixed about removing downloads from list.
+            Find button replaced Downloads button in toolbar
+            Added Delete downloaded file option
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -51,10 +50,7 @@ from PyQt4.QtGui import QApplication, QMainWindow, QWidget, QPrintDialog, QFileD
 from PyQt4.QtGui import QLineEdit, QCompleter, QComboBox, QPushButton, QToolButton, QAction, QMenu
 from PyQt4.QtGui import QGridLayout, QIcon, QPrinter, QProgressBar, QMessageBox, QInputDialog, QLabel
 from PyQt4.QtGui import QPainter, QPixmap, QFont, QTabWidget
-"""
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
-"""
+
 from PyQt4.QtWebKit import QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCookie, QNetworkRequest
 
@@ -112,7 +108,7 @@ class NetworkAccessManager(QNetworkAccessManager):
             if url.endsWith(each):
               block = True
         if block and self.block_fonts and op==self.GetOperation:
-#            print "Blocked: "+url
+#            print("Blocked: "+url)
             return QNetworkAccessManager.createRequest(self, op, QNetworkRequest(QUrl()))
 
 #        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, 2)
@@ -294,59 +290,24 @@ class Main(QMainWindow):
         self.javascriptmode.setCheckable(True)
         self.javascriptmode.triggered.connect(self.setjavascript)
 
-        self.zoominaction = QAction("Zoom  In",self)
-        self.zoominaction.setShortcut("Ctrl++")
-        self.zoominaction.triggered.connect(self.zoomin)
-
-        self.zoomoutaction = QAction("Zoom  Out",self)
-        self.zoomoutaction.setShortcut("Ctrl+-")
-        self.zoomoutaction.triggered.connect(self.zoomout)
-
-        self.fullscreenaction = QAction("Toggle Fullscreen",self)
-        self.fullscreenaction.setShortcut("F11")
-        self.fullscreenaction.triggered.connect(self.fullscreenmode)
-
-        self.websettingsaction = QAction("Settings",self)
-        self.websettingsaction.setShortcut("Ctrl+,")
-        self.websettingsaction.triggered.connect(self.settingseditor)
-
-        self.downloadsaction = QAction("Downloads", self)
-        self.downloadsaction.triggered.connect(self.download_manager)
-
-        self.saveasimageaction = QAction("Save as Image",self)
-        self.saveasimageaction.setShortcut("Ctrl+Shift+S")
-        self.saveasimageaction.triggered.connect(self.saveasimage)
-
-        self.saveashtmlaction = QAction("Save as Html",self)
-        self.saveashtmlaction.setShortcut("Ctrl+S")
-        self.saveashtmlaction.triggered.connect(self.saveashtml)
-
-        self.printaction = QAction("Print",self)
-        self.printaction.setShortcut("Ctrl+P")
-        self.printaction.triggered.connect(self.printpage)
-
-        self.quitaction = QAction("Quit",self)
-        self.quitaction.setShortcut("Ctrl+Q")
-        self.quitaction.triggered.connect(self.close)
-
 ################ Add Actions to Menu ####################
         self.menu = QMenu(self)
-        self.menu.addAction(self.zoominaction)
-        self.menu.addAction(self.zoomoutaction)
-        self.menu.addAction(self.fullscreenaction)
+        self.menu.addAction("Find Text", self.findmode, "Ctrl+F")
+        self.menu.addAction("Zoom In", self.zoomin, "Ctrl++")
+        self.menu.addAction("Zoom Out", self.zoomout, "Ctrl+-")
+        self.menu.addAction("Toggle Fullscreen", self.fullscreenmode, "F11")
         self.menu.addSeparator()
 
         self.menu.addAction(self.loadimagesaction)
         self.menu.addAction(self.javascriptmode)
-        self.menu.addAction(self.websettingsaction)
+        self.menu.addAction("Settings", self.settingseditor, "Ctrl+,")
         self.menu.addSeparator()
 
-        self.menu.addAction(self.downloadsaction)
-        self.menu.addAction(self.saveasimageaction)
-        self.menu.addAction(self.saveashtmlaction)
-        self.menu.addAction(self.printaction)
+        self.menu.addAction("Save as Image", self.saveasimage, "Shift+Ctrl+S")
+        self.menu.addAction("Save as HTML", self.saveashtml, "Ctrl+S")
+        self.menu.addAction("Print to PDF", self.printpage, "Ctrl+P")
         self.menu.addSeparator()
-        self.menu.addAction(self.quitaction)
+        self.menu.addAction("Quit", self.close, "Ctrl+Q")
 
 
 ###############################  Create Gui Parts ##############################
@@ -401,10 +362,10 @@ class Main(QMainWindow):
         self.historyBtn.setToolTip("View History\n     [Alt+H]")
         self.historyBtn.clicked.connect(self.viewhistory)
 
-        self.findBtn = QPushButton(QIcon(":/search.png"), "", self)
-        self.findBtn.setToolTip("Find Text in \n This Page\n [Ctrl+F]")
-        self.findBtn.setShortcut("Ctrl+F")
-        self.findBtn.clicked.connect(self.findmode)
+        self.downloadsBtn = QPushButton(QIcon(":/download.png"), "", self)
+        self.downloadsBtn.setToolTip("Download Manager")
+        self.downloadsBtn.clicked.connect(self.download_manager)
+
         self.find = QPushButton(self)
         self.find.setText("Find/Next")
         self.find.clicked.connect(self.findnext)
@@ -449,7 +410,7 @@ class Main(QMainWindow):
 
         for index, widget in enumerate([self.addtabBtn, self.back, self.forw, self.reload, self.line, self.find,
                 self.findprev, self.cancelfind, self.addbookmarkBtn, self.menuBtn,
-                self.bookmarkBtn, self.historyBtn, self.findBtn]):
+                self.bookmarkBtn, self.historyBtn, self.downloadsBtn]):
             grid.addWidget(widget, 0,index,1,1)
         grid.addWidget(self.pbar, 3,0,1,13)
         grid.addWidget(self.tabWidget, 2, 0, 1, 13)
@@ -574,7 +535,7 @@ class Main(QMainWindow):
             QTimer.singleShot(30000, loop.quit)
             loop.exec_()
         for (title, header) in reply.rawHeaderPairs():
-            print title, header
+            print( title+"->"+header )
         content_name = str(reply.rawHeader('Content-Disposition'))
         if content_name.startswith('attachment'):
             filename = content_name.split('=')[-1]
@@ -649,7 +610,7 @@ class Main(QMainWindow):
             htmlfile = open(filename, 'w')
             htmlfile.write(html)
             htmlfile.close()
-    def printpage(self, page):
+    def printpage(self, page=None):
         printer = QPrinter(mode=QPrinter.HighResolution)
         printer.setOutputFileName(docdir + self.tabWidget.currentWidget().page().mainFrame().title() + ".pdf")
         print_dialog = QPrintDialog(printer, self)
@@ -809,7 +770,7 @@ class Main(QMainWindow):
             self.applysettings()
     def defaultsettings(self): 
         """ This settings is used when settings can not be imported"""
-        print 'Reset Settings'
+        print('Reset Settings')
         self.loadimagesval = True
         self.javascriptenabledval = True
         networkmanager.block_fonts = False
@@ -902,7 +863,7 @@ class Main(QMainWindow):
 def download_externally(url, downloader):
     """ Runs External downloader """
     if "%u" not in str(downloader):
-        print "External downloader command must contain %u in place of URL"
+        print("External downloader command must contain %u in place of URL")
         return
     cmd = str(downloader).replace("%u", str(url))
     cmd = shlex.split(cmd)

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
+import os
 from subprocess import Popen
 from PyQt4 import QtCore, QtGui, QtNetwork
 
@@ -64,7 +64,7 @@ class Download(QtCore.QObject):
             request.setRawHeader('Range', 'bytes={}-'.format(self.loadedsize) )
         self.download = self.nam.get(request)
         self.connect_signals()
-        print 'Retry: '+self.url
+        print('Retry: '+self.url)
 
     def downloadfailed(self, error): # error = 5 if cancelled
         """ at download error """
@@ -133,10 +133,14 @@ class DownloadsModel(QtCore.QAbstractTableModel):
         return filesize
     def removeDownloads(self, selected_rows):
         for row in selected_rows:
-          if self.downloadlist[row].progress != '- - -':
-            self.downloadlist[row].download.abort()
+          if self.downloadlist[row-selected_rows.index(row)].progress != '- - -':
+            self.downloadlist[row-selected_rows.index(row)].download.abort()
           self.downloadlist.pop(row-selected_rows.index(row)).deleteLater()
         self.updateRequested.emit()
+    def deleteDownloads(self, selected_rows):
+        for row in selected_rows:
+          if os.path.exists(str(self.downloadlist[row].filepath)):
+            os.remove(str(self.downloadlist[row].filepath))
 
 class DownloadsTable(QtGui.QTableView):
     def __init__(self, model,parent = None):
@@ -167,6 +171,7 @@ class DownloadsTable(QtGui.QTableView):
                 menu.addAction("Pause", self.pause_resume)
             menu.addAction("Copy Address", self.copy_address)
         menu.addAction("Remove Download", self.remove_selected)
+        menu.addAction("Delete File(s)", self.delete_selected)
         menu.exec_(self.mapToGlobal(self.rel_pos + offset))
     def pause_resume(self):
         if self.model().downloadlist[self.rowClicked].progress == '- - -':
@@ -183,6 +188,13 @@ class DownloadsTable(QtGui.QTableView):
             if row not in selected_rows:
                 selected_rows.append(row)
         self.model().removeDownloads(selected_rows)
+    def delete_selected(self):
+        selected_rows = []
+        for index in self.selectedIndexes():
+            row = index.row()
+            if row not in selected_rows:
+                selected_rows.append(row)
+        self.model().deleteDownloads(selected_rows)
 
 class Downloads_Dialog(object):
     def setupUi(self, Dialog, mymodel):
