@@ -15,8 +15,11 @@ class Download(QtCore.QObject):
         self.loadedsize = 0
         self.progress = '- - -'
     def startDownload(self, networkreply, filepath):
+        """ Browser starts a new download """
         self.download = networkreply
         self.filepath = filepath
+        self.file = QtCore.QFile(self.filepath)
+        self.file.open(QtCore.QIODevice.Append)
         self.filename = QtCore.QFileInfo(self.filepath).fileName()
         self.updateMetaData()
         if self.download.isFinished():
@@ -30,20 +33,23 @@ class Download(QtCore.QObject):
         self.download.finished.connect(self.downloadStopped)
         self.download.error.connect(self.downloadfailed)
     def loadDownload(self, filepath, url, size):
+        """ old downloads are created when browser is opened """
         self.filepath = filepath
         self.url = url
         self.totalsize = size
         self.support_resume = True
         self.filename = QtCore.QFileInfo(self.filepath).fileName()
     def dataReceived(self):
+        """ Add data to download buffer whenever data from network is received """
+        self.loadedsize += self.download.size()
         self.downloadBuffer += self.download.readAll()
-        self.loadedsize = self.downloadBuffer.size()
         if self.totalsize!=0:
           self.progress = "{}%".format(int((float(self.loadedsize)/self.totalsize)*100))
         else:
           self.progress = "Unknown"
         self.datachanged.emit(self)
-
+        if self.downloadBuffer.size()>96000 :
+            self.saveToDisk()
     def downloadStopped(self):
         """ Auto save when stops"""
         self.progress = "- - -"
@@ -51,17 +57,21 @@ class Download(QtCore.QObject):
         if self.loadedsize==self.totalsize:
             try: Popen(["notify-send", 'Download Complete', "The download has completed successfully"])
             except: print("Install libnotify-bin to enable system notification support")
+        self.file.close()
+        self.download.deleteLater()
 
     def retry(self):
-        if self.support_resume:
-            saved_file = QtCore.QFile( self.filepath )
-            saved_file.open(QtCore.QIODevice.ReadOnly)
-            self.downloadBuffer += saved_file.readAll()
-            saved_file.close()
-            self.loadedsize = self.downloadBuffer.size()
+        """ Start download from breakpoint or from beginning(if not resume supported)"""
+        self.file = QtCore.QFile(self.filepath)
+        self.file.open(QtCore.QIODevice.Append)
         request = QtNetwork.QNetworkRequest(QtCore.QUrl(self.url))
         if self.support_resume:
+            self.loadedsize = self.file.size()
+            if self.loadedsize == self.totalsize : return
             request.setRawHeader('Range', 'bytes={}-'.format(self.loadedsize) )
+        else:
+            self.loadedsize = 0
+            self.file.resize(0)
         self.download = self.nam.get(request)
         self.connect_signals()
         print('Retry: '+self.url)
@@ -73,6 +83,7 @@ class Download(QtCore.QObject):
         QtGui.QMessageBox.warning(None, "Download Stopped !","Download has suddenly stopped.\n You may try again\n Error : "+str(error))
 
     def updateMetaData(self):
+        """ Updates download header data in download (Resume support, url, Size)"""
         if self.download.hasRawHeader('Location'):
             self.url = str(self.download.rawHeader('Location'))
         else:
@@ -85,12 +96,9 @@ class Download(QtCore.QObject):
             self.support_resume = False
 
     def saveToDisk(self):
-        output = QtCore.QFile( self.filepath )
-        output.open(QtCore.QIODevice.WriteOnly)
-        output.write( self.downloadBuffer)
-        output.close()
+        """ Appends data to file, when download finished or ByteArray data exceeds 48kB"""
+        self.file.write( self.downloadBuffer)
         self.downloadBuffer.clear()
-        self.download.deleteLater()
 
 class DownloadsModel(QtCore.QAbstractTableModel):
     updateRequested = QtCore.pyqtSignal()
@@ -145,6 +153,7 @@ class DownloadsModel(QtCore.QAbstractTableModel):
 class DownloadsTable(QtGui.QTableView):
     def __init__(self, model,parent = None):
         QtGui.QTableWidget.__init__(self, parent)
+        self.setAlternatingRowColors(True)
         self.setModel(model)
         model.dataChanged.connect(self.dataChanged)
         model.updateRequested.connect(self.update)

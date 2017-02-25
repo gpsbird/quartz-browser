@@ -30,6 +30,7 @@ class BookmarksTable(QtGui.QTableWidget):
     doubleclicked = QtCore.pyqtSignal(str)
     def __init__(self, bookmark_list):
         QtGui.QTableWidget.__init__(self, len(bookmark_list), 2)
+        self.setAlternatingRowColors(True)
         self.setHorizontalHeaderLabels(["Title", "Address"])
 #        self.horizontalHeader().setDefaultSectionSize(240)
         self.horizontalHeader().setResizeMode(0, QtGui.QHeaderView.Stretch)
@@ -120,6 +121,7 @@ class HistoryTable(QtGui.QTableWidget):
     doubleclicked = QtCore.pyqtSignal(str)
     def __init__(self, history_list):
         QtGui.QTableWidget.__init__(self, len(history_list), 2)
+        self.setAlternatingRowColors(True)
         self.setHorizontalHeaderLabels(["Time", "Address"])
         self.horizontalHeader().setDefaultSectionSize(120)
         self.horizontalHeader().setResizeMode(1, QtGui.QHeaderView.Stretch)
