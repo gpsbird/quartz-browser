@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Name = Quartz Browser
-version = 1.8.4
+version = 1.8.5 beta
 Dependency = python-qt4, libnotify-bin
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
@@ -14,15 +14,14 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-            Download filenames are no longer surrounded by quotes.
+            new Download confirmation dialog designed.
+            Download names are correctly resolved.
+   v1.8.4 : Download filenames are no longer surrounded by quotes.
             Shows version in window title.
             Download manager now saves data each time after 96kB is received.
             Printer settings changed (now it adds title and creator)
             Set alternate row colors in downloads/bookmarks/history
             Code size reduced by removing Main.defaultsettings()
-   v1.8.3 : Bug fixed about removing downloads from list.
-            Find button replaced Downloads button in toolbar
-            Added Delete downloaded file option
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -43,7 +42,7 @@ Last Update :
 #       multiple search engines
 #       About/Help dialog
 
-__version__ = "1.8.4"
+__version__ = "1.8.5"
 
 import sys, shlex
 from os.path import abspath, exists
@@ -66,6 +65,7 @@ from settings_dialog import Ui_SettingsDialog
 from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
 from bookmarkparser import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
 from download_manager import Download, DownloadsModel, Downloads_Dialog
+import dwnld_confirm_dialog
 import quartz_common
 
 
@@ -533,24 +533,36 @@ class Main(QMainWindow):
         if reply.rawHeaderList() == []:
             loop = QEventLoop()
             reply.metaDataChanged.connect(loop.quit)
-            QTimer.singleShot(30000, loop.quit)
+            QTimer.singleShot(20000, loop.quit)
             loop.exec_()
         for (title, header) in reply.rawHeaderPairs():
             print( title+"->"+header )
         content_name = str(reply.rawHeader('Content-Disposition'))
-        if content_name.startswith('attachment'):
+        if content_name.startswith('attachment') and '=' in content_name:
             filename = content_name.split('=')[-1]
+            filename = filename.replace('"', '')
         else:
             if reply.hasRawHeader('Location'):
                 decoded_url = QUrl.fromPercentEncoding(str(reply.rawHeader('Location')))
             else:
                 decoded_url = QUrl.fromPercentEncoding(str(reply.url().toString()))
+            decoded_url = QUrl(decoded_url).toString(QUrl.RemoveQuery)
             filename = QFileInfo(decoded_url).fileName()
-        filename = filename.replace('"', '')
-        filepath = QFileDialog.getSaveFileName(self,
-                                  "Download File", downloaddir+str(filename),
-                                  "All Files (*)" )
-        if not filepath.isEmpty():
+        dlDialog = DownloadDialog(self)
+        dlDialog.filenameEdit.setText(filename)
+        if reply.hasRawHeader('Content-Length'):
+            filesize = reply.header(1).toLongLong()[0]
+            if len(str(filesize))>7:
+                filesize = "{}M".format(round(float(filesize)/1048576, 2))
+            else:
+                filesize = "{}k".format(filesize/1024)
+            dlDialog.labelFileSize.setText(filesize)
+        if reply.hasRawHeader('Content-Type'):
+            dlDialog.labelFileType.setText(str(reply.rawHeader('Content-Type')))
+        if reply.hasRawHeader('Accept-Ranges') or reply.hasRawHeader('Content-Range'):
+            dlDialog.labelResume.setText("True")
+        if dlDialog.exec_()== QDialog.Accepted:
+            filepath = dlDialog.folder+dlDialog.filenameEdit.text()
             if self.useexternaldownloader:
                 download_externally(reply.url().toString(), self.externaldownloader)
                 reply.abort()
@@ -854,7 +866,7 @@ class Main(QMainWindow):
 def download_externally(url, downloader):
     """ Runs External downloader """
     if "%u" not in str(downloader):
-        print("External downloader command must contain %u in place of URL")
+        Popen(["notify-send", "Download Error", "External downloader command must contain %u in place of URL"])
         return
     cmd = str(downloader).replace("%u", str(url))
     cmd = shlex.split(cmd)
@@ -863,13 +875,24 @@ def download_externally(url, downloader):
     except OSError:
         Popen(["notify-send", "Download Error", "Downloader command not found"])
 
-
+class DownloadDialog(QDialog, dwnld_confirm_dialog.Ui_downloadDialog):
+    def __init__(self, parent):
+        QDialog.__init__(self, parent)
+        self.folder = downloaddir
+        self.setupUi(self)
+        self.folderButton.clicked.connect(self.changeFolder)
+        self.labelFolder.setText(downloaddir)
+    def changeFolder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder", homedir)
+        if not folder.isEmpty():
+            self.folder = folder + "/"
+            self.labelFolder.setText(self.folder)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setOrganizationName("quartz-browser")
     app.setApplicationName("quartz")
-    # NetworkAccessManager must be global variable, otherwise javascript will not bes rendered
+    # NetworkAccessManager must be global variable, otherwise javascript will not be rendered
     cookiejar = MyCookieJar(QApplication.instance())
     networkmanager = NetworkAccessManager(QApplication.instance())
     networkmanager.setCookieJar(cookiejar)

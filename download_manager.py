@@ -18,10 +18,21 @@ class Download(QtCore.QObject):
         """ Browser starts a new download """
         self.download = networkreply
         self.filepath = filepath
+        self.updateMetaData()
         self.file = QtCore.QFile(self.filepath)
+        if self.support_resume == True and self.file.exists():
+            confirm = QtGui.QMessageBox.question(QtGui.QApplication.desktop(), "Overwrite File ?", 
+            "The file already exists.\nDo you want to Overwrite old file?", "Overwrite", "Append")
+            if confirm == 0:
+                self.file.resize(0)
+            else:
+                self.download.abort()
+                self.download.deleteLater()
+                self.retry()
+        else:
+            self.file.resize(0)
         self.file.open(QtCore.QIODevice.Append)
         self.filename = QtCore.QFileInfo(self.filepath).fileName()
-        self.updateMetaData()
         if self.download.isFinished():
             self.dataReceived()
             self.downloadStopped()
@@ -48,7 +59,7 @@ class Download(QtCore.QObject):
         else:
           self.progress = "Unknown"
         self.datachanged.emit(self)
-        if self.downloadBuffer.size()>96000 :
+        if self.downloadBuffer.size()>300000 :
             self.saveToDisk()
     def downloadStopped(self):
         """ Auto save when stops"""
@@ -80,16 +91,19 @@ class Download(QtCore.QObject):
         """ at download error """
         if (error==5):
             return
-        QtGui.QMessageBox.warning(None, "Download Stopped !","Download has suddenly stopped.\n You may try again\n Error : "+str(error))
+        QtGui.QMessageBox.warning(QtGui.QApplication.desktop(), "Download Stopped !","Download has suddenly stopped.\n You may try again\n Error : "+str(error))
 
     def updateMetaData(self):
         """ Updates download header data in download (Resume support, url, Size)"""
+        # Update Url path
         if self.download.hasRawHeader('Location'):
             self.url = str(self.download.rawHeader('Location'))
         else:
             self.url = self.download.url().toString()
+        # Update total size
         if self.totalsize==0:
             self.totalsize = self.download.header(1).toLongLong()[0]
+        # Update pause/resume support
         if self.download.hasRawHeader('Accept-Ranges') or self.download.hasRawHeader('Content-Range'):
             self.support_resume = True
         else:
@@ -102,7 +116,7 @@ class Download(QtCore.QObject):
 
 class DownloadsModel(QtCore.QAbstractTableModel):
     updateRequested = QtCore.pyqtSignal()
-    def __init__(self, downloadlist, parent=None):
+    def __init__(self, downloadlist, parent=QtGui.QApplication.instance()):
         super(DownloadsModel, self).__init__(parent)
         self.headers = ["File Name", "Loaded Size", "Total Size", "Progress"]
         self.downloadlist = downloadlist
