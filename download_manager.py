@@ -59,17 +59,17 @@ class Download(QtCore.QObject):
         else:
           self.progress = "Unknown"
         self.datachanged.emit(self)
-        if self.downloadBuffer.size()>300000 :
+        if self.downloadBuffer.size()>307200 :
             self.saveToDisk()
     def downloadStopped(self):
         """ Auto save when stops"""
         self.progress = "- - -"
         self.saveToDisk()
+        self.file.close()
+        self.download.deleteLater()
         if self.loadedsize==self.totalsize:
             try: Popen(["notify-send", 'Download Complete', "The download has completed successfully"])
             except: print("Install libnotify-bin to enable system notification support")
-        self.file.close()
-        self.download.deleteLater()
 
     def retry(self):
         """ Start download from breakpoint or from beginning(if not resume supported)"""

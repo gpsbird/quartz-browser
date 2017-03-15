@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Name = Quartz Browser
-version = 1.8.5 beta
+version = 1.8.5
 Dependency = python-qt4, libnotify-bin
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
@@ -14,14 +14,9 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+   v1.8.5   Incompletely downloaded files from other browser can be resumed.
             new Download confirmation dialog designed.
             Download names are correctly resolved.
-   v1.8.4 : Download filenames are no longer surrounded by quotes.
-            Shows version in window title.
-            Download manager now saves data each time after 96kB is received.
-            Printer settings changed (now it adds title and creator)
-            Set alternate row colors in downloads/bookmarks/history
-            Code size reduced by removing Main.defaultsettings()
 
    Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
   
@@ -40,7 +35,6 @@ Last Update :
 """
 # TODO : 
 #       multiple search engines
-#       About/Help dialog
 
 __version__ = "1.8.5"
 
@@ -270,10 +264,10 @@ class Main(QMainWindow):
         self.dwnldsmodel = DownloadsModel(self.downloads, QApplication.instance())
         imported_downloads = parseDownloads(configdir+"downloads.txt")
         for [filepath, url, totalsize] in imported_downloads:
-            incomplt_download = Download(networkmanager)
-            incomplt_download.loadDownload(filepath, url, long(totalsize))
-            incomplt_download.datachanged.connect(self.dwnldsmodel.datachanged)
-            self.downloads.append(incomplt_download)
+            old_download = Download(networkmanager)
+            old_download.loadDownload(filepath, url, long(totalsize))
+            old_download.datachanged.connect(self.dwnldsmodel.datachanged)
+            self.downloads.append(old_download)
         self.history = []
         self.bookmarks = parsebookmarks(configdir+"bookmarks.txt")
         cookiejar.importCookies(self)
@@ -539,8 +533,12 @@ class Main(QMainWindow):
             print( title+"->"+header )
         content_name = str(reply.rawHeader('Content-Disposition'))
         if content_name.startswith('attachment') and '=' in content_name:
-            filename = content_name.split('=')[-1]
-            filename = filename.replace('"', '')
+            if content_name.count('"') == 2: # Extracts texts inside quotes when two quotes are present
+                start = content_name.find('"')+1
+                end = content_name.rfind('"')
+                filename = content_name[start:end]
+            else:
+                filename = content_name.split('=')[-1]
         else:
             if reply.hasRawHeader('Location'):
                 decoded_url = QUrl.fromPercentEncoding(str(reply.rawHeader('Location')))
