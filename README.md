@@ -9,7 +9,7 @@ This has minimal settings to avoid confusion.Yet it has most useful settings, su
 To save pages to read later, print feature can be used to save as pdf. And it can also export the whole page as png image.  
 
 
-**Usage** = quartz.py URL  
+**Usage** = main.py URL  
  $ *quartz.py http://www.google.com*  
  
 #### Features :  
