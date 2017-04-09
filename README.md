@@ -1,7 +1,6 @@
 # Quartz Browser
 A useful fast Web Browser written in pyqt4
 
-**Version** = 1.5  
 **Dependency** = python-qt4, libnotify-bin  
 
 ### Description
