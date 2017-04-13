@@ -8,15 +8,20 @@ This browser is aimed at ease of use, faster page loading, very short startup ti
 This has minimal settings to avoid confusion.Yet it has most useful settings, such as load images on/off, javascript on/off, change font.  
 To save pages to read later, print feature can be used to save as pdf. And it can also export the whole page as png image.  
 
+### Installation
+Install the browser by running following command..  
+ $ *sudo python setup.py install*
+To uninstall run..  
+ $ *sudo python setup.py uninstall quartz*
 
-**Usage** = main.py URL  
- $ *quartz.py http://www.google.com*  
+**Usage** = quartz URL  
+ $ *quartz http://www.google.com*  
  
 #### Features :  
  1. Unified Search/Url Bar  
  2. Turn Javascript, Load Images on/off  
  3. Find Text inside page  
- 4. Print Page  
+ 4. Print Page or Save as PDF  
  5. Export full page as PNG image  
  6. Custom User Agent  
  7. Tabbed browsing  
@@ -24,5 +29,5 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
  9. Resume incomplete files downloaded by other browsers  
 
 ### Download .deb Package
-  You can directly download debian package for debian base distros and install it.  
+  You can directly download debian package for debian based distros and install it.  
   Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
