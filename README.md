@@ -9,10 +9,16 @@ This has minimal settings to avoid confusion.Yet it has most useful settings, su
 To save pages to read later, print feature can be used to save as pdf. And it can also export the whole page as png image.  
 
 ### Installation
-Install the browser by running following command..  
- $ *sudo python setup.py install*
+To Install the browser open terminal inside quartz-browser-master directory.  
+And then run following command..  
+ $ *sudo pip install .*  
+
 To uninstall run..  
- $ *sudo python setup.py uninstall quartz*
+ $ *sudo pip uninstall quartz*
+
+### Download .deb Package
+  You can directly download debian package for debian based distros and install it.  
+  Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
 
 **Usage** = quartz URL  
  $ *quartz http://www.google.com*  
@@ -28,6 +34,3 @@ To uninstall run..
  8. Integrated Download Manager with pause/resume support  
  9. Resume incomplete files downloaded by other browsers  
 
-### Download .deb Package
-  You can directly download debian package for debian based distros and install it.  
-  Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
