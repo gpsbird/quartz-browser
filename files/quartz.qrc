@@ -1,0 +1,15 @@
+<RCC>
+<qresource>
+<file>prev.png</file>
+<file>next.png</file>
+<file>refresh.png</file>
+<file>stop.png</file>
+<file>add-bookmark.png</file>
+<file>bookmarks.png</file>
+<file>history.png</file>
+<file>download.png</file>
+<file>menu.png</file>
+<file>add-tab.png</file>
+<file>quartz.png</file>
+</qresource>
+</RCC>
