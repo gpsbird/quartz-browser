@@ -11,28 +11,24 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
 ### Installation
 To Install the browser open terminal inside quartz-browser-master directory.  
 And then run following command..  
-    sudo pip install .  
+    `sudo pip install .`  
 
 To uninstall run..  
-    sudo pip uninstall quartz
+    `sudo pip uninstall quartz`
 
 ### Download .deb Package
   You can directly download debian package for debian based distros and install it.  
   Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
 
 ### Usage 
-Code :
-    quartz
+    `quartz`  
 Or  
-Code:
-    quartz http://www.google.com  
+    `quartz http://www.google.com`  
 If you want to run the browser without installing, then  
 Open terminal in quartz-browser-master directory and run  
-Code:
-    ./run.py  
+    `./run.py`  
 Or  
-Code:
-    ./run.py http://www.google.com  
+    `./run.py http://www.google.com`  
 
 ### Features :  
  1. Unified Search/Url Bar  
