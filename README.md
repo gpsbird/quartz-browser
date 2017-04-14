@@ -20,12 +20,13 @@ To uninstall run..
   You can directly download debian package for debian based distros and install it.  
   Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
 
-### Usage 
+### Usage
+To run after installing, type command..  
     `quartz`  
 Or  
     `quartz http://www.google.com`  
-If you want to run the browser without installing, then  
-Open terminal in quartz-browser-master directory and run  
+If you want to run the browser without/before installing, then  
+Open terminal and change directory to quartz-browser-master and run  
     `./run.py`  
 Or  
     `./run.py http://www.google.com`  
