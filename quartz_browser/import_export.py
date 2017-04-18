@@ -36,15 +36,15 @@ def parseDownloads(filename):
     for line in dwnld_lines:
         line = line[:-1]
         dwnld.append(line)
-        if len(dwnld) == 3:
+        if len(dwnld) == 4:
             dwnld_list.append(dwnld)
             dwnld = []
     return dwnld_list
 
 def writeDownloads(filepath, downloads):
     dl_text = ''
-    for download in downloads:
-        dl_text = dl_text+download.filepath+'\n'+download.url+'\n'+str(download.totalsize)+'\n'
+    for [filename, url, filesize, timestamp] in downloads:
+        dl_text = dl_text+filename+'\n'+url+'\n'+filesize+'\n'+timestamp+'\n'
     dl_file = open(filepath, 'w')
     dl_file.write(dl_text)
     dl_file.close()

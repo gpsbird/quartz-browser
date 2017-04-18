@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/pi/Desktop/Linux/Programming/Python/quartz-settings.ui'
+# Form implementation generated from reading ui file '/home/subha/.Linux/Programming/Python/quartz-browser/files/settings_dialog.ui'
 #
-# Created: Sat Dec 10 06:09:38 2016
+# Created: Sat Apr 15 21:43:07 2017
 #      by: PyQt4 UI code generator 4.11.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -34,7 +34,7 @@ class Ui_SettingsDialog(object):
         self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Cancel|QtGui.QDialogButtonBox.Save)
         self.buttonBox.setObjectName(_fromUtf8("buttonBox"))
         self.groupBox = QtGui.QGroupBox(SettingsDialog)
-        self.groupBox.setGeometry(QtCore.QRect(30, 20, 281, 211))
+        self.groupBox.setGeometry(QtCore.QRect(30, 20, 281, 231))
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.verticalLayout = QtGui.QVBoxLayout(self.groupBox)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
@@ -47,6 +47,9 @@ class Ui_SettingsDialog(object):
         self.checkFontLoad = QtGui.QCheckBox(self.groupBox)
         self.checkFontLoad.setObjectName(_fromUtf8("checkFontLoad"))
         self.verticalLayout.addWidget(self.checkFontLoad)
+        self.checkBlockPopups = QtGui.QCheckBox(self.groupBox)
+        self.checkBlockPopups.setObjectName(_fromUtf8("checkBlockPopups"))
+        self.verticalLayout.addWidget(self.checkBlockPopups)
         self.checkUserAgent = QtGui.QCheckBox(self.groupBox)
         self.checkUserAgent.setObjectName(_fromUtf8("checkUserAgent"))
         self.verticalLayout.addWidget(self.checkUserAgent)
@@ -127,21 +130,27 @@ class Ui_SettingsDialog(object):
     def retranslateUi(self, SettingsDialog):
         SettingsDialog.setWindowTitle(_translate("SettingsDialog", "Settings", None))
         self.groupBox.setTitle(_translate("SettingsDialog", "Browsing", None))
+        self.checkLoadImages.setToolTip(_translate("SettingsDialog", "Load images in web pages", None))
         self.checkLoadImages.setText(_translate("SettingsDialog", "Load Images", None))
+        self.checkJavascript.setToolTip(_translate("SettingsDialog", "Enable javascript in to make website properly working", None))
         self.checkJavascript.setText(_translate("SettingsDialog", "Enable JavaScript", None))
         self.checkFontLoad.setText(_translate("SettingsDialog", "Block loading Fonts", None))
+        self.checkBlockPopups.setToolTip(_translate("SettingsDialog", "Do not allow webpages to open new tabs", None))
+        self.checkBlockPopups.setText(_translate("SettingsDialog", "Block Popup Tabs", None))
         self.checkUserAgent.setText(_translate("SettingsDialog", "Custom User Agent", None))
         self.useragentEdit.setPlaceholderText(_translate("SettingsDialog", "Example: Nokia 5130", None))
         self.groupBox_2.setTitle(_translate("SettingsDialog", "Appearance", None))
         self.label_sans.setText(_translate("SettingsDialog", "Sans Font :", None))
         self.label.setText(_translate("SettingsDialog", "Min. Font Size :", None))
-        self.spinFontSize.setSuffix(_translate("SettingsDialog", " px", None))
+        self.spinFontSize.setSuffix(_translate("SettingsDialog", " pt.", None))
         self.checkMaximize.setText(_translate("SettingsDialog", "Maximize window on Start Up", None))
         self.label_standard.setText(_translate("SettingsDialog", "Standard Font :", None))
         self.label_serif.setText(_translate("SettingsDialog", "Serif Font :", None))
         self.label_fixed.setText(_translate("SettingsDialog", "Fixed Font :", None))
         self.groupBox_3.setTitle(_translate("SettingsDialog", "Others", None))
+        self.checkDownMan.setToolTip(_translate("SettingsDialog", "Start dwnload in external download manager", None))
         self.checkDownMan.setText(_translate("SettingsDialog", "External Download Manager", None))
+        self.downManEdit.setToolTip(_translate("SettingsDialog", "This must contain %u in place of URL", None))
         self.downManEdit.setPlaceholderText(_translate("SettingsDialog", "Example: wget -c %u", None))
         self.checkHomePage.setText(_translate("SettingsDialog", "Custom Home Page URL", None))
         self.cookiesButton.setText(_translate("SettingsDialog", "Clear Cookies", None))

@@ -3,9 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
 
 # User created
 cache/
 debian/
+dist/
+*.egg-info/

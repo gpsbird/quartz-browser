@@ -1,3 +1,3 @@
 #!/usr/bin/env python
-from quartz import main
+from quartz_browser import main
 main.main()

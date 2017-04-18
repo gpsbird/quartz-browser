@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-   Copyright (C) 2016 Arindam Chaudhuri <ksharindam@gmail.com>
+   Copyright (C) 2016-2017 Arindam Chaudhuri <ksharindam@gmail.com>
   
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,13 +17,13 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.8.6"
+__version__ = "1.8.7"
 
 import sys, shlex
 from os.path import abspath, exists
 from os import environ, mkdir
 from subprocess import Popen
-from time import strftime
+from time import time, strftime
 
 from PyQt4.QtCore import QUrl, pyqtSignal, Qt, QStringList, QSettings, QSize, QPoint
 from PyQt4.QtCore import QFileInfo, QByteArray, QEventLoop, QTimer
@@ -38,7 +38,7 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCo
 
 from settings_dialog import Ui_SettingsDialog
 from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
-from bookmarkparser import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
+from import_export import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
 from download_manager import Download, DownloadsModel, Downloads_Dialog
 import dwnld_confirm_dialog
 import quartz_common
@@ -48,6 +48,10 @@ homedir = environ['HOME']
 downloaddir = homedir+"/Downloads/"
 docdir = homedir+"/Documents/"
 configdir = homedir+"/.config/quartz-browser/"
+downloads_list_file = configdir+"downloads.txt"
+
+block_popups = False
+#useragent_string = ""
 
 def validUrl(url_str):
     """ This checks if the url is valid. Used in GoTo() func"""
@@ -163,6 +167,9 @@ class MyWebView(QWebView):
     def createWindow(self, windowtype):
         """This function is internally called when new window is requested.
            This will must return a QWebView object"""
+        global block_popups
+        if block_popups:
+            return self
         webview = MyWebView(self.parent())
         self.windowCreated.emit(webview)
         return webview
@@ -242,13 +249,14 @@ class Main(QMainWindow):
         self.websettings = QWebSettings.globalSettings()
         self.websettings.setAttribute(QWebSettings.DnsPrefetchEnabled, True)
         self.websettings.setMaximumPagesInCache(10)
-#        self.websettings.setAttribute(QWebSettings.PrintElementBackgrounds, False)
+#        self.websettings.setAttribute(QWebSettings.JavascriptCanOpenWindows, False)
         self.downloads = []
         self.dwnldsmodel = DownloadsModel(self.downloads, QApplication.instance())
-        imported_downloads = parseDownloads(configdir+"downloads.txt")
-        for [filepath, url, totalsize] in imported_downloads:
+        self.dwnldsmodel.deleteDownloadsRequested.connect(self.deleteDownloads)
+        imported_downloads = parseDownloads(downloads_list_file)
+        for [filepath, url, totalsize, timestamp] in imported_downloads:
             old_download = Download(networkmanager)
-            old_download.loadDownload(filepath, url, long(totalsize))
+            old_download.loadDownload(filepath, url, long(totalsize), timestamp)
             old_download.datachanged.connect(self.dwnldsmodel.datachanged)
             self.downloads.append(old_download)
         self.history = []
@@ -532,27 +540,34 @@ class Main(QMainWindow):
         if reply.hasRawHeader('Content-Length'):
             filesize = reply.header(1).toLongLong()[0]
             if len(str(filesize))>7:
-                filesize = "{}M".format(round(float(filesize)/1048576, 2))
+                file_size = "{}M".format(round(float(filesize)/1048576, 2))
             else:
-                filesize = "{}k".format(filesize/1024)
-            dlDialog.labelFileSize.setText(filesize)
+                file_size = "{}k".format(filesize/1024)
+            dlDialog.labelFileSize.setText(file_size)
+        else:
+            filesize = 0
         if reply.hasRawHeader('Content-Type'):
             dlDialog.labelFileType.setText(str(reply.rawHeader('Content-Type')))
         if reply.hasRawHeader('Accept-Ranges') or reply.hasRawHeader('Content-Range'):
             dlDialog.labelResume.setText("True")
         if dlDialog.exec_()== QDialog.Accepted:
             filepath = dlDialog.folder+dlDialog.filenameEdit.text()
+            url = str(reply.url().toString())
             if self.useexternaldownloader:
-                download_externally(reply.url().toString(), self.externaldownloader)
+                download_externally(url, self.externaldownloader)
                 reply.abort()
                 return
             if reply.hasRawHeader('Location'):
-                url = QUrl(str(reply.rawHeader('Location')))
+                url = str(reply.rawHeader('Location'))
                 reply.abort()
-                reply = networkmanager.get(QNetworkRequest(url))
+                reply = networkmanager.get(QNetworkRequest(QUrl(url)))
 
+            timestamp = str(time())
+            imported_downloads = parseDownloads(downloads_list_file)
+            imported_downloads.insert(0, [filepath, url, str(filesize), timestamp])
+            writeDownloads(downloads_list_file, imported_downloads)
             newdownload = Download(networkmanager)
-            newdownload.startDownload(reply, filepath)
+            newdownload.startDownload(reply, filepath, timestamp)
             newdownload.datachanged.connect(self.dwnldsmodel.datachanged)
             self.downloads.insert(0, newdownload)
         else:
@@ -563,6 +578,13 @@ class Main(QMainWindow):
         downloads_dialog = Downloads_Dialog()
         downloads_dialog.setupUi(dialog, self.dwnldsmodel)
         dialog.exec_()
+    def deleteDownloads(self, timestamps):
+        imported_downloads = parseDownloads(downloads_list_file)
+        exported_downloads = []
+        for download in imported_downloads:
+            if download[-1] not in timestamps:
+                exported_downloads.append(download)
+        writeDownloads(downloads_list_file, exported_downloads)
 
     def urlsuggestions(self, text):
         """ Creates the list of url suggestions for URL box """
@@ -624,7 +646,9 @@ class Main(QMainWindow):
         addbmkdialog.titleEdit.setText(self.tabWidget.currentWidget().page().mainFrame().title())
         addbmkdialog.addressEdit.setText(self.line.text())
         if (dialog.exec_() == QDialog.Accepted):
-            self.bookmarks.insert(0, [str(addbmkdialog.titleEdit.text().toUtf8()), addbmkdialog.addressEdit.text()])
+            bmk = [str(addbmkdialog.titleEdit.text().toUtf8()), addbmkdialog.addressEdit.text()]
+            self.bookmarks.insert(0, bmk)
+            writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
     def managebookmarks(self):
         """ Opens Bookmarks dialog """
         dialog = QDialog(self)
@@ -632,7 +656,10 @@ class Main(QMainWindow):
         bmk_dialog.setupUi(dialog, self.bookmarks)
         bmk_dialog.tableView.doubleclicked.connect(self.GoTo)
         if (dialog.exec_() == QDialog.Accepted):
-            self.bookmarks = bmk_dialog.tableView.data
+            bookmarks = bmk_dialog.tableView.data
+            if len(bookmarks) != len(self.bookmarks):
+                self.bookmarks = bookmarks
+                writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
     def viewhistory(self):
         dialog = QDialog(self)
         history_dialog = History_Dialog()
@@ -694,6 +721,7 @@ class Main(QMainWindow):
 ########################## Settings Portion #########################
     def settingseditor(self):  
         """ Opens the settings manager dialog, then applies the change"""
+        global block_popups
         dialog = QDialog(self)
         websettingsdialog = Ui_SettingsDialog()
         websettingsdialog.setupUi(dialog)
@@ -703,6 +731,8 @@ class Main(QMainWindow):
             websettingsdialog.checkJavascript.setChecked(True)
         if networkmanager.block_fonts:
             websettingsdialog.checkFontLoad.setChecked(True)
+        if block_popups:
+            websettingsdialog.checkBlockPopups.setChecked(True)
         if self.customuseragentval :
             websettingsdialog.checkUserAgent.setChecked(True)
         websettingsdialog.useragentEdit.setText(self.useragentval)
@@ -737,6 +767,11 @@ class Main(QMainWindow):
                 networkmanager.block_fonts = True
             else:
                 networkmanager.block_fonts = False
+            # Block Popups
+            if websettingsdialog.checkBlockPopups.isChecked():
+                block_popups = True
+            else:
+                block_popups = False
             # User Agent
             if websettingsdialog.checkUserAgent.isChecked():
                 self.customuseragentval = True
@@ -767,12 +802,15 @@ class Main(QMainWindow):
             self.seriffontval = websettingsdialog.seriffontCombo.currentText()
             self.fixedfontval = websettingsdialog.fixedfontCombo.currentText()
             self.applysettings()
+            self.savesettings()
     def opensettings(self): 
         """ Reads settings file in ~/.config/quartz-browser/ directory and
             saves values in settings variables"""
+        global block_popups
         self.loadimagesval = self.settings.value('LoadImages', True).toBool()
         self.javascriptenabledval = self.settings.value('JavaScriptEnabled', True).toBool()
         networkmanager.block_fonts = self.settings.value('BlockFontLoading', False).toBool()
+        block_popups = self.settings.value('BlockPopups', False).toBool()
         self.customuseragentval = self.settings.value('CustomUserAgent', False).toBool()
         self.useragentval = self.settings.value('UserAgent', "Nokia 5130").toString()
         self.customhomepageurlval = self.settings.value('CustomHomePageUrl', False).toBool()
@@ -787,9 +825,11 @@ class Main(QMainWindow):
         self.fixedfontval = self.settings.value('FixedFont', 'Monospace').toString()
     def savesettings(self):
         """ Writes setings to disk in ~/.config/quartz-browser/ directory"""
+        global block_popups
         self.settings.setValue('LoadImages', self.loadimagesval)
         self.settings.setValue('JavaScriptEnabled', self.javascriptenabledval)
         self.settings.setValue('BlockFontLoading', networkmanager.block_fonts)
+        self.settings.setValue('BlockPopups', block_popups)
         self.settings.setValue('CustomUserAgent', self.customuseragentval)
         self.settings.setValue('UserAgent', self.useragentval)
         self.settings.setValue('CustomHomePageUrl', self.customhomepageurlval)
@@ -832,8 +872,6 @@ class Main(QMainWindow):
     def closeEvent(self, event):
         """This saves all settings, bookmarks, cookies etc. during window close"""
         self.savesettings()
-        writebookmarks(configdir+"bookmarks.txt", self.bookmarks)
-        writeDownloads(configdir+"downloads.txt", self.downloads)
         cookiesArray = QByteArray()
         cookieList = cookiejar.allCookies()
         for cookie in cookieList:

@@ -38,7 +38,7 @@
      <x>30</x>
      <y>20</y>
      <width>281</width>
-     <height>211</height>
+     <height>231</height>
     </rect>
    </property>
    <property name="title">
@@ -47,6 +47,9 @@
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
      <widget class="QCheckBox" name="checkLoadImages">
+      <property name="toolTip">
+       <string>Load images in web pages</string>
+      </property>
       <property name="text">
        <string>Load Images</string>
       </property>
@@ -54,6 +57,9 @@
     </item>
     <item>
      <widget class="QCheckBox" name="checkJavascript">
+      <property name="toolTip">
+       <string>Enable javascript in to make website properly working</string>
+      </property>
       <property name="text">
        <string>Enable JavaScript</string>
       </property>
@@ -63,6 +69,16 @@
      <widget class="QCheckBox" name="checkFontLoad">
       <property name="text">
        <string>Block loading Fonts</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="checkBlockPopups">
+      <property name="toolTip">
+       <string>Do not allow webpages to open new tabs</string>
+      </property>
+      <property name="text">
+       <string>Block Popup Tabs</string>
       </property>
      </widget>
     </item>
@@ -198,6 +214,9 @@
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
      <widget class="QCheckBox" name="checkDownMan">
+      <property name="toolTip">
+       <string>Start dwnload in external download manager</string>
+      </property>
       <property name="text">
        <string>External Download Manager</string>
       </property>
@@ -205,6 +224,9 @@
     </item>
     <item>
      <widget class="QLineEdit" name="downManEdit">
+      <property name="toolTip">
+       <string>This must contain %u in place of URL</string>
+      </property>
       <property name="placeholderText">
        <string>Example: wget -c %u</string>
       </property>

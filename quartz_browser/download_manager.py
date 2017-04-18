@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 import os
 from subprocess import Popen
 from PyQt4 import QtCore, QtGui, QtNetwork
@@ -14,10 +15,11 @@ class Download(QtCore.QObject):
         self.totalsize = 0
         self.loadedsize = 0
         self.progress = '- - -'
-    def startDownload(self, networkreply, filepath):
+    def startDownload(self, networkreply, filepath, timestamp):
         """ Browser starts a new download """
         self.download = networkreply
         self.filepath = filepath
+        self.timestamp = timestamp
         self.updateMetaData()
         self.file = QtCore.QFile(self.filepath)
         if self.support_resume == True and self.file.exists():
@@ -43,11 +45,12 @@ class Download(QtCore.QObject):
         self.download.readyRead.connect(self.dataReceived)
         self.download.finished.connect(self.downloadStopped)
         self.download.error.connect(self.downloadfailed)
-    def loadDownload(self, filepath, url, size):
+    def loadDownload(self, filepath, url, size, timestamp):
         """ old downloads are created when browser is opened """
         self.filepath = filepath
         self.url = url
         self.totalsize = size
+        self.timestamp = timestamp
         self.support_resume = True
         self.filename = QtCore.QFileInfo(self.filepath).fileName()
     def dataReceived(self):
@@ -116,6 +119,7 @@ class Download(QtCore.QObject):
 
 class DownloadsModel(QtCore.QAbstractTableModel):
     updateRequested = QtCore.pyqtSignal()
+    deleteDownloadsRequested = QtCore.pyqtSignal(QtCore.QStringList)
     def __init__(self, downloadlist, parent=QtGui.QApplication.instance()):
         super(DownloadsModel, self).__init__(parent)
         self.headers = ["File Name", "Loaded Size", "Total Size", "Progress"]
@@ -154,11 +158,14 @@ class DownloadsModel(QtCore.QAbstractTableModel):
             filesize = "{}k".format(filesize/1024)
         return filesize
     def removeDownloads(self, selected_rows):
+        timestamps = []
         for row in selected_rows:
+          timestamps.append(self.downloadlist[row-selected_rows.index(row)].timestamp)
           if self.downloadlist[row-selected_rows.index(row)].progress != '- - -':
             self.downloadlist[row-selected_rows.index(row)].download.abort()
           self.downloadlist.pop(row-selected_rows.index(row)).deleteLater()
         self.updateRequested.emit()
+        self.deleteDownloadsRequested.emit(timestamps)
     def deleteDownloads(self, selected_rows):
         for row in selected_rows:
           if os.path.exists(str(self.downloadlist[row].filepath)):
