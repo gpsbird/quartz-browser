@@ -17,6 +17,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Downloads bug fixed with non ascii url
    v1.8.7   Bookmarks are instantly saved to disk after new bookmark is added.
             Fixed a downloads bug when multiple browser windows are open
             Block popup tabs feature added.
