@@ -237,6 +237,7 @@ class QurlEdit(QLineEdit):
 
 class Main(QMainWindow):
     def __init__(self): 
+        global downloads_list_file
         QMainWindow.__init__(self)
         self.setWindowIcon(QIcon(":/quartz.png")) 
         self.setWindowTitle("Quartz Browser - "+__version__)
@@ -255,8 +256,15 @@ class Main(QMainWindow):
         self.dwnldsmodel.deleteDownloadsRequested.connect(self.deleteDownloads)
         imported_downloads = parseDownloads(downloads_list_file)
         for [filepath, url, totalsize, timestamp] in imported_downloads:
+            try :                                                  # Check if downloads.txt is valid
+                totalsize, time = long(totalsize), float(timestamp)
+            except :
+                self.downloads = []
+                writeDownloads(downloads_list_file, [])
+                print("Error in importing Downloads.")
+                break
             old_download = Download(networkmanager)
-            old_download.loadDownload(filepath, url, long(totalsize), timestamp)
+            old_download.loadDownload(filepath, url, totalsize, timestamp)
             old_download.datachanged.connect(self.dwnldsmodel.datachanged)
             self.downloads.append(old_download)
         self.history = []
@@ -394,8 +402,8 @@ class Main(QMainWindow):
 #       
 
         for index, widget in enumerate([self.addtabBtn, self.back, self.forw, self.reload, self.line, self.find,
-                self.findprev, self.cancelfind, self.addbookmarkBtn, self.menuBtn,
-                self.bookmarkBtn, self.historyBtn, self.downloadsBtn]):
+                self.findprev, self.cancelfind, self.addbookmarkBtn, self.bookmarkBtn,
+                self.menuBtn, self.historyBtn, self.downloadsBtn]):
             grid.addWidget(widget, 0,index,1,1)
         grid.addWidget(self.pbar, 3,0,1,13)
         grid.addWidget(self.tabWidget, 2, 0, 1, 13)
@@ -513,6 +521,7 @@ class Main(QMainWindow):
         self.handleUnsupportedContent(reply)
     def handleUnsupportedContent(self, reply):
         """ This is called when url content is a downloadable file. e.g- pdf,mp3,mp4 """
+        global downloads_list_file
         if reply.rawHeaderList() == []:
             loop = QEventLoop()
             reply.metaDataChanged.connect(loop.quit)
@@ -552,7 +561,7 @@ class Main(QMainWindow):
             dlDialog.labelResume.setText("True")
         if dlDialog.exec_()== QDialog.Accepted:
             filepath = dlDialog.folder+dlDialog.filenameEdit.text()
-            url = str(reply.url().toString())
+            url = reply.url().toString()
             if self.useexternaldownloader:
                 download_externally(url, self.externaldownloader)
                 reply.abort()
@@ -579,6 +588,7 @@ class Main(QMainWindow):
         downloads_dialog.setupUi(dialog, self.dwnldsmodel)
         dialog.exec_()
     def deleteDownloads(self, timestamps):
+        global downloads_list_file
         imported_downloads = parseDownloads(downloads_list_file)
         exported_downloads = []
         for download in imported_downloads:
@@ -884,7 +894,7 @@ def download_externally(url, downloader):
     if "%u" not in str(downloader):
         Popen(["notify-send", "Download Error", "External downloader command must contain %u in place of URL"])
         return
-    cmd = str(downloader).replace("%u", str(url))
+    cmd = str(downloader).replace("%u", url)
     cmd = shlex.split(cmd)
     try:
         Popen(cmd)
