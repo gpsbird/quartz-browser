@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
       name='quartz-browser',
-      version='1.8.7',
+      version='1.8.8',
       description='Fast Lightweight web browser written in PyQt4',
       long_description='''To run it you need PyQt4 module and notify-send command.  
 Install python-qt4 (for PyQt4 module) and libnotify-bin(for notify-send command) in debian based distros''',

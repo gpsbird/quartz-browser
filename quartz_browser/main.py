@@ -17,7 +17,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.8.7"
+__version__ = "1.8.8"
 
 import sys, shlex
 from os.path import abspath, exists
