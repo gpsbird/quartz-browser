@@ -18,19 +18,22 @@ class Download(QtCore.QObject):
     def startDownload(self, networkreply, filepath, timestamp):
         """ Browser starts a new download """
         self.download = networkreply
-        self.filepath = filepath
+        self.filepath = unicode(filepath)
         self.timestamp = timestamp
         self.updateMetaData()
         self.file = QtCore.QFile(self.filepath)
         if self.support_resume == True and self.file.exists():
             confirm = QtGui.QMessageBox.question(QtGui.QApplication.desktop(), "Overwrite File ?", 
-            "The file already exists.\nDo you want to Overwrite old file?", "Overwrite", "Append")
+            "The file already exists.\nDo you want to Overwrite old file?", "Continue Remaining", "Replace Old", "Rename")
             if confirm == 0:
-                self.file.resize(0)
-            else:
                 self.download.abort()
                 self.download.deleteLater()
                 self.retry()
+            elif confirm == 1:
+                self.file.resize(0)
+            else:
+                self.filepath = os.path.splitext(self.filepath)[0] + '1' + os.path.splitext(self.filepath)[1]
+                self.file = QtCore.QFile(self.filepath)
         else:
             self.file.resize(0)
         self.file.open(QtCore.QIODevice.Append)
@@ -133,7 +136,7 @@ class DownloadsModel(QtCore.QAbstractTableModel):
         col = index.column()
         if role==QtCore.Qt.DisplayRole:
           if col==0:
-            return "{}".format(self.downloadlist[row].filename)
+            return unicode(self.downloadlist[row].filename)
           elif col==1:
             return self.formatFileSize(self.downloadlist[row].loadedsize)
           elif col==2:
@@ -168,8 +171,8 @@ class DownloadsModel(QtCore.QAbstractTableModel):
         self.deleteDownloadsRequested.emit(timestamps)
     def deleteDownloads(self, selected_rows):
         for row in selected_rows:
-          if os.path.exists(str(self.downloadlist[row].filepath)):
-            os.remove(str(self.downloadlist[row].filepath))
+          if os.path.exists(self.downloadlist[row].filepath):
+            os.remove(self.downloadlist[row].filepath)
 
 class DownloadsTable(QtGui.QTableView):
     def __init__(self, model,parent = None):

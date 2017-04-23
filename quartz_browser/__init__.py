@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.8.7
+version = 1.8.8
 Executable Command = quartz
 Package Name = quartz-browser
 Python Module Name = quartz_browser
@@ -17,14 +17,12 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+   v1.8.8   Download bug about unicode filenames fixed
             Downloads bug fixed with non ascii url
    v1.8.7   Bookmarks are instantly saved to disk after new bookmark is added.
             Fixed a downloads bug when multiple browser windows are open
             Block popup tabs feature added.
             Show tooltips in settings.
-   v1.8.6   Pause or Stop options in downloads (instead of only pause).
-            Window icon added.
-            Print preview dialog added.
 
 """
 # TODO : 

@@ -14,7 +14,7 @@ And then run following command..
     `sudo pip install .`  
 
 To uninstall run..  
-    `sudo pip uninstall quartz`
+    `sudo pip uninstall quartz-browser`
 
 ### Download .deb Package
   You can directly download debian package for debian based distros and install it.  

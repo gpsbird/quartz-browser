@@ -41,7 +41,8 @@ from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dial
 from import_export import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
 from download_manager import Download, DownloadsModel, Downloads_Dialog
 import dwnld_confirm_dialog
-import quartz_common
+import quartz_data
+#import scripts
 
 
 homedir = environ['HOME']
@@ -300,6 +301,7 @@ class Main(QMainWindow):
         self.menu.addAction("Save as Image", self.saveasimage, "Shift+Ctrl+S")
         self.menu.addAction("Save as HTML", self.saveashtml, "Ctrl+S")
         self.menu.addAction("Print to PDF", self.printpage, "Ctrl+P")
+        #self.menu.addAction("Print Friendly", self.printFriendly, "Ctrl+Shift+P")
         self.menu.addSeparator()
         self.menu.addAction("Quit", self.close, "Ctrl+Q")
 
@@ -531,7 +533,7 @@ class Main(QMainWindow):
             print( title+"->"+header )
         content_name = str(reply.rawHeader('Content-Disposition'))
         if content_name.startswith('attachment') and '=' in content_name:
-            if content_name.count('"') == 2: # Extracts texts inside quotes when two quotes are present
+            if content_name.count('"') >= 2: # Extracts texts inside quotes when two quotes are present
                 start = content_name.find('"')+1
                 end = content_name.rfind('"')
                 filename = content_name[start:end]
@@ -647,7 +649,14 @@ class Main(QMainWindow):
         print_dialog = QPrintPreviewDialog(printer, self)
         print_dialog.paintRequested.connect(page.print_)
         print_dialog.exec_()
+    """def printFriendly(self):
+        self.tabWidget.currentWidget().page().mainFrame().evaluateJavaScript(scripts.jsPrintFriendly)
+        loop = QEventLoop()
+        QTimer.singleShot(2000, loop.quit)
+        loop.exec_()
+        self.tabWidget.currentWidget().page().mainFrame().evaluateJavaScript('window.print()')"""
 
+##################################################################################################
     def addbookmark(self):
         """ Opens add bookmark dialog and gets url from url box"""
         dialog = QDialog(self)
