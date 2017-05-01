@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.8.8
+version = 1.8.9
 Executable Command = quartz
 Package Name = quartz-browser
 Python Module Name = quartz_browser
@@ -17,13 +17,28 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-   v1.8.8   Download bug about unicode filenames fixed
-            Downloads bug fixed with non ascii url
-   v1.8.7   Bookmarks are instantly saved to disk after new bookmark is added.
-            Fixed a downloads bug when multiple browser windows are open
-            Block popup tabs feature added.
-            Show tooltips in settings.
+            Supports RTSP video playing (in youtube)
+            LinkDelegation is active.
+            Supports error page extension.
+            Min font size changed to 11 frrom 12
+            Print-Friendly added to the menu
 
+...........................................................................
+|   Copyright (C) 2016-2017 Arindam Chaudhuri <ksharindam@gmail.com>       |
+|                                                                          |
+|   This program is free software: you can redistribute it and/or modify   |
+|   it under the terms of the GNU General Public License as published by   |
+|   the Free Software Foundation, either version 3 of the License, or      |
+|   (at your option) any later version.                                    |
+|                                                                          |
+|   This program is distributed in the hope that it will be useful,        |
+|   but WITHOUT ANY WARRANTY; without even the implied warranty of         |
+|   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          |
+|   GNU General Public License for more details.                           |
+|                                                                          |
+|   You should have received a copy of the GNU General Public License      |
+|   along with this program.  If not, see <http://www.gnu.org/licenses/>.  |
+...........................................................................
 """
 # TODO : 
 
