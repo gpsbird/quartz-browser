@@ -205,7 +205,7 @@
      <x>340</x>
      <y>20</y>
      <width>301</width>
-     <height>211</height>
+     <height>231</height>
     </rect>
    </property>
    <property name="title">
@@ -229,6 +229,20 @@
       </property>
       <property name="placeholderText">
        <string>Example: wget -c %u</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="label_MediaPlayer">
+      <property name="text">
+       <string>Media player command :</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLineEdit" name="mediaPlayerEdit">
+      <property name="placeholderText">
+       <string>Example: mplayer</string>
       </property>
      </widget>
     </item>

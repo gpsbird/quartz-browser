@@ -37,7 +37,7 @@ downloads_list_file = configdir+"downloads.txt"
 block_popups = False
 js_debug_mode = False
 #useragent_string = ""
-video_player_command = 'xterm -fullscreen -fg black -bg black -e omxplayer -o local %s'
+video_player_command = 'mplayer'
 
 def validUrl(url_str):
     """ This checks if the url is valid. Used in GoTo() func"""
@@ -194,7 +194,8 @@ class MyWebView(QWebView):
         # This supports rtsp video play protocol
         if addr.startsWith('rtsp://'):
             global video_player_command
-            os.system(video_player_command % addr)
+            cmd = unicode(video_player_command + ' ' + addr)
+            Popen(shlex.split(cmd))
             return
         self.load(url)
 
@@ -512,7 +513,7 @@ class Main(QMainWindow):
     def GoTo(self, url):
         if not validUrl(str(url)): # This func returns true if url is valid
             url = "http://"+url
-        self.tabWidget.currentWidget().load(QUrl(url))
+        self.tabWidget.currentWidget().openLink(QUrl(url))
         self.line.setText(url)
 
     def Back(self): 
@@ -799,30 +800,42 @@ class Main(QMainWindow):
 ########################## Settings Portion #########################
     def settingseditor(self):  
         """ Opens the settings manager dialog, then applies the change"""
-        global block_popups
+        global block_popups, video_player_command
         dialog = QDialog(self)
         websettingsdialog = Ui_SettingsDialog()
         websettingsdialog.setupUi(dialog)
+        # Load Images
         if self.loadimagesval:
             websettingsdialog.checkLoadImages.setChecked(True)
+        # JavaScript
         if self.javascriptenabledval:
             websettingsdialog.checkJavascript.setChecked(True)
+        # Fonts blocking
         if networkmanager.block_fonts:
             websettingsdialog.checkFontLoad.setChecked(True)
+        # Popups blocking
         if block_popups:
             websettingsdialog.checkBlockPopups.setChecked(True)
+        # Custom user agent
         if self.customuseragentval :
             websettingsdialog.checkUserAgent.setChecked(True)
         websettingsdialog.useragentEdit.setText(self.useragentval)
+        # Home Page Url
         if self.customhomepageurlval:
             websettingsdialog.checkHomePage.setChecked(True)
         websettingsdialog.homepageEdit.setText(self.homepageurlval)
         websettingsdialog.homepageEdit.setCursorPosition(0)
+        # External download manager
         if self.useexternaldownloader:
             websettingsdialog.checkDownMan.setChecked(True)
         websettingsdialog.downManEdit.setText(self.externaldownloader)
+        # RTSP media player command
+        websettingsdialog.mediaPlayerEdit.setText(video_player_command)
+        websettingsdialog.mediaPlayerEdit.setCursorPosition(0)
+        # Maximize on startup
         if self.maximizeonstartup:
             websettingsdialog.checkMaximize.setChecked(True)
+        # Font settings
         websettingsdialog.spinFontSize.setValue(self.minfontsizeval)
         websettingsdialog.standardfontCombo.setCurrentFont(QFont(self.standardfontval))
         websettingsdialog.sansfontCombo.setCurrentFont(QFont(self.sansfontval))
@@ -868,6 +881,8 @@ class Main(QMainWindow):
             else:
                 self.useexternaldownloader = False
             self.externaldownloader = websettingsdialog.downManEdit.text()
+            # Media Player Command
+            video_player_command = websettingsdialog.mediaPlayerEdit.text()
             # Maximize on startup
             if websettingsdialog.checkMaximize.isChecked():
                 self.maximizeonstartup = True
@@ -884,7 +899,7 @@ class Main(QMainWindow):
     def opensettings(self): 
         """ Reads settings file in ~/.config/quartz-browser/ directory and
             saves values in settings variables"""
-        global block_popups
+        global block_popups, video_player_command
         self.loadimagesval = self.settings.value('LoadImages', True).toBool()
         self.javascriptenabledval = self.settings.value('JavaScriptEnabled', True).toBool()
         networkmanager.block_fonts = self.settings.value('BlockFontLoading', False).toBool()
@@ -895,6 +910,7 @@ class Main(QMainWindow):
         self.homepageurlval = self.settings.value('HomePageUrl', "file:///usr/share/doc/python-qt4-doc/html/classes.html").toString()
         self.useexternaldownloader = self.settings.value('UseExternalDownloader', False).toBool()
         self.externaldownloader = self.settings.value('ExternalDownloader', "wget -c %u").toString()
+        video_player_command = self.settings.value('MediaPlayerCommand', video_player_command).toString()
         self.maximizeonstartup = self.settings.value('MaximizeOnStartup', False).toBool()
         self.minfontsizeval = int(self.settings.value('MinFontSize', 11).toString())
         self.standardfontval = self.settings.value('StandardFont', 'Sans').toString()
@@ -903,7 +919,7 @@ class Main(QMainWindow):
         self.fixedfontval = self.settings.value('FixedFont', 'Monospace').toString()
     def savesettings(self):
         """ Writes setings to disk in ~/.config/quartz-browser/ directory"""
-        global block_popups
+        global block_popups, video_player_command
         self.settings.setValue('LoadImages', self.loadimagesval)
         self.settings.setValue('JavaScriptEnabled', self.javascriptenabledval)
         self.settings.setValue('BlockFontLoading', networkmanager.block_fonts)
@@ -914,6 +930,7 @@ class Main(QMainWindow):
         self.settings.setValue('HomePageUrl', self.homepageurlval)
         self.settings.setValue('UseExternalDownloader', self.useexternaldownloader)
         self.settings.setValue('ExternalDownloader', self.externaldownloader)
+        self.settings.setValue('MediaPlayerCommand', video_player_command)
         self.settings.setValue('MaximizeOnStartup', self.maximizeonstartup)
         self.settings.setValue('MinFontSize', self.minfontsizeval)
         self.settings.setValue('StandardFont', self.standardfontval)

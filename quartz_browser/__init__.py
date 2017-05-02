@@ -17,6 +17,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Changing Video player command added to settings
             Supports RTSP video playing (in youtube)
             LinkDelegation is active.
             Supports error page extension.

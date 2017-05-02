@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/subha/.Linux/Programming/Python/quartz-browser/files/settings_dialog.ui'
+# Form implementation generated from reading ui file 'files/settings_dialog.ui'
 #
-# Created: Sat Apr 15 21:43:07 2017
+# Created: Tue May  2 08:05:32 2017
 #      by: PyQt4 UI code generator 4.11.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -102,7 +102,7 @@ class Ui_SettingsDialog(object):
         self.label_fixed.setObjectName(_fromUtf8("label_fixed"))
         self.gridLayout.addWidget(self.label_fixed, 3, 0, 1, 1)
         self.groupBox_3 = QtGui.QGroupBox(SettingsDialog)
-        self.groupBox_3.setGeometry(QtCore.QRect(340, 20, 301, 211))
+        self.groupBox_3.setGeometry(QtCore.QRect(340, 20, 301, 231))
         self.groupBox_3.setObjectName(_fromUtf8("groupBox_3"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox_3)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
@@ -112,6 +112,12 @@ class Ui_SettingsDialog(object):
         self.downManEdit = QtGui.QLineEdit(self.groupBox_3)
         self.downManEdit.setObjectName(_fromUtf8("downManEdit"))
         self.verticalLayout_2.addWidget(self.downManEdit)
+        self.label_MediaPlayer = QtGui.QLabel(self.groupBox_3)
+        self.label_MediaPlayer.setObjectName(_fromUtf8("label_MediaPlayer"))
+        self.verticalLayout_2.addWidget(self.label_MediaPlayer)
+        self.mediaPlayerEdit = QtGui.QLineEdit(self.groupBox_3)
+        self.mediaPlayerEdit.setObjectName(_fromUtf8("mediaPlayerEdit"))
+        self.verticalLayout_2.addWidget(self.mediaPlayerEdit)
         self.checkHomePage = QtGui.QCheckBox(self.groupBox_3)
         self.checkHomePage.setObjectName(_fromUtf8("checkHomePage"))
         self.verticalLayout_2.addWidget(self.checkHomePage)
@@ -152,6 +158,8 @@ class Ui_SettingsDialog(object):
         self.checkDownMan.setText(_translate("SettingsDialog", "External Download Manager", None))
         self.downManEdit.setToolTip(_translate("SettingsDialog", "This must contain %u in place of URL", None))
         self.downManEdit.setPlaceholderText(_translate("SettingsDialog", "Example: wget -c %u", None))
+        self.label_MediaPlayer.setText(_translate("SettingsDialog", "Media player command :", None))
+        self.mediaPlayerEdit.setPlaceholderText(_translate("SettingsDialog", "Example: mplayer", None))
         self.checkHomePage.setText(_translate("SettingsDialog", "Custom Home Page URL", None))
         self.cookiesButton.setText(_translate("SettingsDialog", "Clear Cookies", None))
 
