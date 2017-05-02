@@ -37,7 +37,7 @@ downloads_list_file = configdir+"downloads.txt"
 block_popups = False
 js_debug_mode = False
 #useragent_string = ""
-video_player_command = 'mplayer'
+video_player_command = 'mplayer --fs'
 
 def validUrl(url_str):
     """ This checks if the url is valid. Used in GoTo() func"""
