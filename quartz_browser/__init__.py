@@ -16,6 +16,8 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Link can be copied from bookmark dialog.
+            Youtube downloader added
  v1.8.9     Changing Video player command added to settings
             Supports RTSP video playing (in youtube)
             LinkDelegation is active.
@@ -43,4 +45,4 @@ Last Update :
 # TODO : 
 #        Integrate youtube downloader
 
-__version__ = "1.8.9"
+__version__ = "1.9.0b"

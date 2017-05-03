@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __init__ import __version__
-import sys, shlex, os
+import sys, shlex, os, re
 from os.path import abspath, exists
 from subprocess import Popen
 from time import time, strftime
@@ -20,12 +20,11 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkCookieJar, QNetworkCo
 
 from settings_dialog import Ui_SettingsDialog
 from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dialog
-from import_export import parsebookmarks, writebookmarks, parseDownloads, writeDownloads
+from import_export import parsebookmarks, writebookmarks, parseDownloads, writeDownloads, jsPrintFriendly
 from download_manager import Download, DownloadsModel, Downloads_Dialog
-import dwnld_confirm_dialog
+import dwnld_confirm_dialog, youtube_dialog
 import quartz_data
-import scripts
-
+from pytube.api import YouTube
 
 homedir = os.environ['HOME']
 downloaddir = homedir+"/Downloads/"
@@ -46,6 +45,11 @@ def validUrl(url_str):
             validurl = True
     return validurl
 
+youtube_regex = re.compile('http(s)?\:\/\/(((m\.|www\.)?youtube\.com\/watch\?v=)|(youtu.be\/))([a-zA-Z0-9\-_])+')
+
+def validYoutubeUrl(url):
+    if youtube_regex.match(url):
+        return True
 
 class MyCookieJar(QNetworkCookieJar):
     """ Reimplemented QNetworkCookieJar to get cookie import/export feature"""
@@ -275,6 +279,10 @@ class QurlEdit(QLineEdit):
         request = QNetworkRequest(QUrl.fromUserInput(self.text()))
         self.downloadRequested.emit(request)
 
+    def setText(self, string):
+        QLineEdit.setText(self, string)
+        self.setCursorPosition(0)
+
 class Main(QMainWindow):
     def __init__(self): 
         global downloads_list_file
@@ -378,6 +386,11 @@ class Main(QMainWindow):
         self.forw.setMinimumSize(35,26) 
         self.forw.clicked.connect(self.Forward)
 
+        self.youtubeBtn = QPushButton(QIcon(":/youtube-dwnld.png"), "", self)
+        self.youtubeBtn.setToolTip("Download this Youtube Video")
+        self.youtubeBtn.clicked.connect(self.downloadYoutubeVideo)
+        self.youtubeBtn.hide()
+
         self.addbookmarkBtn = QPushButton(QIcon(":/add-bookmark.png"), "", self)
         self.addbookmarkBtn.setShortcut("Ctrl+D")
         self.addbookmarkBtn.setToolTip("Add Bookmark\n   [Ctrl+D]")
@@ -442,12 +455,12 @@ class Main(QMainWindow):
         self.addTab()
 #       
 
-        for index, widget in enumerate([self.addtabBtn, self.back, self.forw, self.reload, self.line, self.find,
+        for index, widget in enumerate([self.addtabBtn, self.back, self.forw, self.reload, self.youtubeBtn, self.line, self.find,
                 self.findprev, self.cancelfind, self.addbookmarkBtn, self.bookmarkBtn,
                 self.menuBtn, self.historyBtn, self.downloadsBtn]):
             grid.addWidget(widget, 0,index,1,1)
-        grid.addWidget(self.pbar, 3,0,1,13)
-        grid.addWidget(self.tabWidget, 2, 0, 1, 13)
+        grid.addWidget(self.tabWidget, 2, 0, 1, 14)
+        grid.addWidget(self.pbar, 3,0,1,14)
 #-----------------------Window settings --------------------------------
 #        self.line.setStyleSheet("background-image:url(:/search.png);background-repeat:no-repeat;\
 #                                padding: 2 2 2 24 ;font-size:15px;") 
@@ -499,9 +512,13 @@ class Main(QMainWindow):
             self.pbar.hide()
         url =  self.tabWidget.currentWidget().url().toString()
         self.line.setText(url)
+        if validYoutubeUrl(url):
+            self.youtubeBtn.show()
+        else:
+            self.youtubeBtn.hide()
 
     def Enter(self): 
-        url = str(self.line.text())
+        url = unicode(self.line.text())
         if validUrl(url):
             self.GoTo(url)
             return
@@ -510,9 +527,8 @@ class Main(QMainWindow):
         self.GoTo(url)
 
     def GoTo(self, url):
-        if not validUrl(str(url)): # This func returns true if url is valid
-            url = "http://"+url
-        self.tabWidget.currentWidget().openLink(QUrl(url))
+        URL = QUrl.fromUserInput(unicode(url))
+        self.tabWidget.currentWidget().openLink(URL)
         self.line.setText(url)
 
     def Back(self): 
@@ -528,6 +544,10 @@ class Main(QMainWindow):
     def onUrlChange(self,url, webview):
         if webview is self.tabWidget.currentWidget():
             self.line.setText(url)
+            if validYoutubeUrl(url):
+                self.youtubeBtn.show()
+            else:
+                self.youtubeBtn.hide()
             for item in self.history:  # Removes the old item, inserts new same item on the top
                 if url in item[1]:
                     self.history.remove(item)
@@ -582,7 +602,7 @@ class Main(QMainWindow):
         reply = networkmanager.get(networkrequest)
         self.handleUnsupportedContent(reply)
 
-    def handleUnsupportedContent(self, reply):
+    def handleUnsupportedContent(self, reply, force_filename=None):
         """ This is called when url content is a downloadable file. e.g- pdf,mp3,mp4 """
         global downloads_list_file
         if reply.rawHeaderList() == []:
@@ -592,8 +612,11 @@ class Main(QMainWindow):
             loop.exec_()
         for (title, header) in reply.rawHeaderPairs():
             print( title+"->"+header )
+        # Get filename
         content_name = str(reply.rawHeader('Content-Disposition'))
-        if content_name.startswith('attachment') and '=' in content_name:
+        if force_filename:
+            filename = force_filename
+        elif content_name.startswith('attachment') and '=' in content_name:
             if content_name.count('"') >= 2: # Extracts texts inside quotes when two quotes are present
                 start = content_name.find('"')+1
                 end = content_name.rfind('"')
@@ -607,8 +630,10 @@ class Main(QMainWindow):
                 decoded_url = QUrl.fromPercentEncoding(str(reply.url().toString()))
             decoded_url = QUrl(decoded_url).toString(QUrl.RemoveQuery)
             filename = QFileInfo(decoded_url).fileName()
+        # Create downld Confirmation dialog
         dlDialog = DownloadDialog(self)
         dlDialog.filenameEdit.setText(filename)
+        # Get filesize
         if reply.hasRawHeader('Content-Length'):
             filesize = reply.header(1).toLongLong()[0]
             if len(str(filesize))>7:
@@ -618,10 +643,12 @@ class Main(QMainWindow):
             dlDialog.labelFileSize.setText(file_size)
         else:
             filesize = 0
+        # Get filetype and resume support info
         if reply.hasRawHeader('Content-Type'):
             dlDialog.labelFileType.setText(str(reply.rawHeader('Content-Type')))
         if reply.hasRawHeader('Accept-Ranges') or reply.hasRawHeader('Content-Range'):
             dlDialog.labelResume.setText("True")
+        # Execute dialog and get confirmation
         if dlDialog.exec_()== QDialog.Accepted:
             filepath = dlDialog.folder+dlDialog.filenameEdit.text()
             url = reply.url().toString()
@@ -661,6 +688,17 @@ class Main(QMainWindow):
                 exported_downloads.append(download)
         writeDownloads(downloads_list_file, exported_downloads)
 
+    def downloadYoutubeVideo(self):
+        url = unicode(self.line.text())
+        yt = YouTube(url)
+        videos = yt.get_videos()
+        dialog = youtube_dialog.YoutubeDialog(videos, self)
+        if dialog.exec_() == 1 :
+            index = abs(dialog.buttonGroup.checkedId())-2
+            vid = videos[index]
+            reply = networkmanager.get( QNetworkRequest(QUrl.fromUserInput(vid.url)) )
+            self.handleUnsupportedContent(reply, vid.filename + '.' + vid.extension)
+            
     def saveasimage(self):
         """ Saves the whole page as PNG image"""
         filename = QFileDialog.getSaveFileName(self,
@@ -704,7 +742,7 @@ class Main(QMainWindow):
 
     def printFriendly(self):
         """ Create a printfriendly version of the page using http://www.printfriendly.com"""
-        self.tabWidget.currentWidget().page().mainFrame().evaluateJavaScript(scripts.jsPrintFriendly)
+        self.tabWidget.currentWidget().page().mainFrame().evaluateJavaScript(jsPrintFriendly)
         loop = QEventLoop()
         QTimer.singleShot(5000, loop.quit)
         loop.exec_()

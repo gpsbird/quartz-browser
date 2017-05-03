@@ -14,7 +14,6 @@ Install python-qt4 (for PyQt4 module) and libnotify-bin(for notify-send command)
       author='Arindam Chaudhuri',
       author_email='ksharindam@gmail.com',
       license='GNU GPLv3',
-      packages=['quartz_browser'],
 #      install_requires=['PyQt4',      ],
       classifiers=[
       'Development Status :: 5 - Production/Stable',
@@ -24,8 +23,9 @@ Install python-qt4 (for PyQt4 module) and libnotify-bin(for notify-send command)
       'Programming Language :: Python :: 2.7',
       'Topic :: Internet :: WWW/HTTP :: Browsers',    
       ],
+      packages=['quartz_browser', 'quartz_browser.pytube'],
       entry_points={
-          'console_scripts': ['quartz=quartz_browser.main:main'],
+          'console_scripts': ['quartz=quartz_browser.main:main', 'pytube=quartz_browser.pytube.__main__:main'],
       },
 #      include_package_data=True,
       zip_safe=False)
