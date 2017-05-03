@@ -33,7 +33,7 @@ Or
 
 ### Features :  
  1. Unified Search/Url Bar  
- 2. Turn Javascript, Load Images on/off  
+ 2. Turn Javascript, Load Images on/off  option in main menu  
  3. Find Text inside page  
  4. Print Page or Save as PDF  
  5. Export full page as PNG image  
@@ -41,5 +41,5 @@ Or
  7. Tabbed browsing  
  8. Integrated Download Manager with pause/resume support  
  9. Resume incomplete files downloaded by other browsers  
- 10. Play video with RTSP protocol using a media player (e.g omxplayer, mplayer)
+ 10. Play video with RTSP protocol using a media player (e.g omxplayer, mplayer)  
 

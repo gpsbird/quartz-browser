@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__version__ = "1.8.9-beta"
-
+from __init__ import __version__
 import sys, shlex, os
 from os.path import abspath, exists
 from subprocess import Popen

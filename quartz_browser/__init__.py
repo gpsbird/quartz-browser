@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """
 Name = Quartz Browser
-version = 1.8.9
 Executable Command = quartz
 Package Name = quartz-browser
 Python Module Name = quartz_browser
@@ -17,7 +16,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-            Changing Video player command added to settings
+ v1.8.9     Changing Video player command added to settings
             Supports RTSP video playing (in youtube)
             LinkDelegation is active.
             Supports error page extension.
@@ -42,4 +41,6 @@ Last Update :
 ...........................................................................
 """
 # TODO : 
+#        Integrate youtube downloader
 
+__version__ = "1.8.9"
