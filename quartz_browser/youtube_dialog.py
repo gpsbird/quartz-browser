@@ -37,12 +37,14 @@ class YoutubeDialog(QtGui.QDialog):
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.frame)
         self.buttonGroup = QtGui.QButtonGroup(self.frame)
-        for video in self.videos:
+        if len(self.videos)>3: checked_btn = 2 
+        else: checked_btn = len(self.videos)-1
+        for i, video in enumerate(self.videos):
             radioButton = QtGui.QRadioButton(self.frame)
             radioButton.setText(video.resolution + "   (" + video.extension + ')')
             self.buttonGroup.addButton(radioButton)
             self.verticalLayout_2.addWidget(radioButton)
-
+            if i==checked_btn : radioButton.setChecked(True)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout_2.addItem(spacerItem)
         self.verticalLayout.addWidget(self.frame)

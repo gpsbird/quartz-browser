@@ -16,6 +16,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            360p mp4 is default for youtube video
             Link can be copied from bookmark dialog.
             Youtube downloader added
  v1.8.9     Changing Video player command added to settings
