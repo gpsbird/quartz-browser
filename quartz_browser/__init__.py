@@ -16,6 +16,7 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Page export as JPG image support.
             360p mp4 is default for youtube video
             Link can be copied from bookmark dialog.
             Youtube downloader added

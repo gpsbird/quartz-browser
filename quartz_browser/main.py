@@ -23,7 +23,7 @@ from bookmarks_dialog import Bookmarks_Dialog, Add_Bookmark_Dialog, History_Dial
 from import_export import parsebookmarks, writebookmarks, parseDownloads, writeDownloads, jsPrintFriendly
 from download_manager import Download, DownloadsModel, Downloads_Dialog
 import dwnld_confirm_dialog, youtube_dialog
-import quartz_data
+import resources
 from pytube.api import YouTube
 
 homedir = os.environ['HOME']
@@ -700,10 +700,10 @@ class Main(QMainWindow):
             self.handleUnsupportedContent(reply, vid.filename + '.' + vid.extension)
             
     def saveasimage(self):
-        """ Saves the whole page as PNG image"""
+        """ Saves the whole page as PNG/JPG image"""
         filename = QFileDialog.getSaveFileName(self,
                                       "Select Image to Save", downloaddir + self.tabWidget.currentWidget().page().mainFrame().title() +".png",
-                                      "PNG Image (*.png)" )
+                                      "PNG Image (*.png);;JPEG Image (*.jpg)" )
         if not filename.isEmpty():
             viewportsize = self.tabWidget.currentWidget().page().viewportSize()
             contentsize = self.tabWidget.currentWidget().page().mainFrame().contentsSize()
