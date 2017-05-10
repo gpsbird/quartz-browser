@@ -7,8 +7,8 @@ setup(
       name='quartz-browser',
       version=__version__,
       description='Fast Lightweight web browser written in PyQt4',
-      long_description='''To run it you need PyQt4 module and notify-send command.  
-Install python-qt4 (for PyQt4 module) and libnotify-bin(for notify-send command) in debian based distros''',
+      long_description='''To run it you need PyQt4 module.  
+Install python-qt4 (for PyQt4 module) in debian based distros''',
       keywords='pyqt pyqt4 browser qtwebkit',
       url='http://github.com/ksharindam/quartz-browser',
       author='Arindam Chaudhuri',

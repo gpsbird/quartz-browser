@@ -242,15 +242,15 @@ class MyWebView(QWebView):
         pm = self.page().mainFrame().hitTestContent(self.rel_pos).pixmap()
         url = self.page().mainFrame().hitTestContent(self.rel_pos).imageUrl()
         url.setQueryItems([])
-        name = QFileInfo(url.toString()).fileName()
+        filepath = url.toString()
+        if QFileInfo(filepath).suffix() not in ['jpg', 'jpeg', 'png'] :
+            filepath = os.path.splitext(unicode(filepath))[0] + '.jpg'
         filepath = QFileDialog.getSaveFileName(self,
-                                      "Select Image to Save", downloaddir + name,
-                                      "Image Files (*.jpg *.png *.jpeg)" )
+                                      "Select Image to Save", downloaddir + QFileInfo(filepath).fileName(),
+                                      "All Images (*.jpg *.jpeg *.png);;JPEG File (*.jpg *.jpeg);;PNG File (*.png)" )
         if not filepath.isEmpty():
-          if not (filepath.endsWith(".jpg",0) or filepath.endsWith(".png",0) or filepath.endsWith(".jpeg",0)):
-            filepath += ".jpg"
           if pm.save(filepath):
-            QMessageBox.information(None, "Successful !","Image has been successfully saved!")
+            QMessageBox.information(self, "Successful !","Image %s \nhas been successfully saved!"%QFileInfo(filepath).fileName())
 
     def toggleEditMode(self, checked):
         if checked:
@@ -714,7 +714,7 @@ class Main(QMainWindow):
             self.tabWidget.currentWidget().page().mainFrame().render(painter, 0xff)# 0xff=QWebFrame.AllLayers
             painter.end()
             if img.save(filename):
-                Popen(["notify-send","Successful !","Page has been successfully saved as\n"+filename])
+                QMessageBox.information(self, "Successful !","Page has been successfully saved as\n"+filename)
             self.tabWidget.currentWidget().page().setViewportSize(viewportsize)
 
     def saveashtml(self):
@@ -1015,14 +1015,14 @@ class Main(QMainWindow):
 def download_externally(url, downloader):
     """ Runs External downloader """
     if "%u" not in str(downloader):
-        Popen(["notify-send", "Download Error", "External downloader command must contain %u in place of URL"])
-        return
-    cmd = str(downloader).replace("%u", url)
+        cmd = downloader + ' ' + url
+    else:
+        cmd = str(downloader).replace("%u", url)
     cmd = shlex.split(cmd)
     try:
         Popen(cmd)
     except OSError:
-        Popen(["notify-send", "Download Error", "Downloader command not found"])
+        QMessageBox.information(None, "Download Error", "Downloader command not found")
 
 class DownloadDialog(QDialog, dwnld_confirm_dialog.Ui_downloadDialog):
     def __init__(self, parent):

@@ -74,8 +74,7 @@ class Download(QtCore.QObject):
         self.file.close()
         self.download.deleteLater()
         if self.loadedsize==self.totalsize:
-            try: Popen(["notify-send", 'Download Complete', "The download has completed successfully"])
-            except: print("Install libnotify-bin to enable system notification support")
+            QtGui.QMessageBox.information(None, 'Download Complete', "File %s \nhas been downloaded successfully"%self.filename)
 
     def retry(self):
         """ Start download from breakpoint or from beginning(if not resume supported)"""

@@ -1,7 +1,7 @@
 # Quartz Browser
 A useful fast Web Browser written in pyqt4
 
-**Dependency** = python-qt4, libnotify-bin  
+**Dependency** = python-qt4  
 
 ### Description
 This browser is aimed at ease of use, faster page loading, very short startup time.  
@@ -33,13 +33,14 @@ Or
 
 ### Features :  
  1. Unified Search/Url Bar  
- 2. Turn Javascript, Load Images on/off  option in main menu  
- 3. Find Text inside page  
- 4. Print Page or Save as PDF  
- 5. Export full page as PNG image  
- 6. Custom User Agent  
- 7. Tabbed browsing  
- 8. Integrated Download Manager with pause/resume support  
- 9. Resume incomplete files downloaded by other browsers  
- 10. Play video with RTSP protocol using a media player (e.g omxplayer, mplayer)  
+ 1. Turn Javascript, Load Images on/off  option in main menu  
+ 1. Find Text inside page  
+ 1. Print Page or Save as PDF, Save print-friendly PDF  
+ 1. Export full page as PNG/JPEG image, HTML file  
+ 1. Custom User Agent  
+ 1. Tabbed browsing  
+ 1. Integrated Download Manager with pause/resume support  
+ 1. Resume incomplete files downloaded by other browsers  
+ 1. Play video with RTSP protocol using a media player (e.g omxplayer, mplayer)  
+ 1. YouTube video download support. (Download button automatically appears)  
 

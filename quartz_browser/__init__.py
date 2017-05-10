@@ -4,7 +4,7 @@ Name = Quartz Browser
 Executable Command = quartz
 Package Name = quartz-browser
 Python Module Name = quartz_browser
-Debian Dependency = python-qt4, libnotify-bin
+Debian Dependency = python-qt4
 
 Description = A Light Weight Internet Browser
 Features =  Change User agent to mobile/desktop
@@ -16,16 +16,12 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+ v1.9.1     Dependency on libnotify-bin removed.
+            File type select (jpg/png) when saving images
             Page export as JPG image support.
             360p mp4 is default for youtube video
             Link can be copied from bookmark dialog.
             Youtube downloader added
- v1.8.9     Changing Video player command added to settings
-            Supports RTSP video playing (in youtube)
-            LinkDelegation is active.
-            Supports error page extension.
-            Min font size changed to 11 frrom 12
-            Print-Friendly added to the menu
 
 ...........................................................................
 |   Copyright (C) 2016-2017 Arindam Chaudhuri <ksharindam@gmail.com>       |
@@ -45,6 +41,6 @@ Last Update :
 ...........................................................................
 """
 # TODO : 
-#        Integrate youtube downloader
+#        
 
-__version__ = "1.9.0b"
+__version__ = "1.9.1"
