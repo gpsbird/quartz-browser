@@ -1,7 +1,7 @@
 # Quartz Browser
 A useful fast Web Browser written in pyqt4
 
-**Dependency** = python-qt4  
+**Dependency** = python2.7, python-qt4  
 
 ### Description
 This browser is aimed at ease of use, faster page loading, very short startup time.  
@@ -17,8 +17,8 @@ To uninstall run..
     `sudo pip uninstall quartz-browser`
 
 ### Download .deb Package
-  You can directly download debian package for debian based distros and install it.  
-  Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
+You can directly download debian package for debian based distros and install it.  
+Download it [here](https://github.com/ksharindam/quartz-browser/releases)  
 
 ### Usage
 To run after installing, type command..  
@@ -31,15 +31,13 @@ Open terminal and change directory to quartz-browser-master and run
 Or  
     `./run.py http://www.google.com`  
 
-### Features :  
- 1. Unified Search/Url Bar  
+### Important Features :  
  1. Turn Javascript, Load Images on/off  option in main menu  
- 1. Find Text inside page  
- 1. Print Page or Save as PDF, Save print-friendly PDF  
+ 1. Save as PDF, Save print-friendly PDF  
  1. Export full page as PNG/JPEG image, HTML file  
  1. Custom User Agent  
- 1. Tabbed browsing  
- 1. Integrated Download Manager with pause/resume support  
+ 1. Internal Download Manager with pause/resume support  
+ 1. External Download Manager support (e.g - wget, uGet )  
  1. Resume incomplete files downloaded by other browsers  
  1. Play video with RTSP protocol using a media player (e.g omxplayer, mplayer)  
  1. YouTube video download support. (Download button automatically appears)  
