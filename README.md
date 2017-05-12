@@ -27,9 +27,9 @@ Or
     `quartz http://www.google.com`  
 If you want to run the browser without/before installing, then  
 Open terminal and change directory to quartz-browser-master and run  
-    `./run.py`  
+    `./run.sh`  
 Or  
-    `./run.py http://www.google.com`  
+    `./run.sh http://www.google.com`  
 
 ### Important Features :  
  1. Turn Javascript, Load Images on/off  option in main menu  
