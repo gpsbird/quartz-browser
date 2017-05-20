@@ -265,6 +265,7 @@ class QurlEdit(QLineEdit):
     downloadRequested = pyqtSignal(QNetworkRequest)
     def __init__(self, parent=None):
         super(QurlEdit, self).__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def mouseDoubleClickEvent(self, event):
         self.selectAll()
@@ -788,7 +789,6 @@ class Main(QMainWindow):
         self.find.show()
         self.findprev.show()
         self.cancelfind.show()
-        self.line.setFocusPolicy(Qt.StrongFocus)
         self.line.setFocus()
     def cancelfindmode(self):
         """ Hides the find buttons, updates urlbox"""

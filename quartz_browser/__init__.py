@@ -42,5 +42,7 @@ Last Update :
 """
 # TODO : 
 #        
+# FIXME : Link status remains after tab switch
+#         Clear selections after deleting downloads/bookmarks
 
 __version__ = "1.9.1"
