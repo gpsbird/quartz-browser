@@ -177,16 +177,12 @@ class DownloadsTable(QtGui.QTableView):
     def __init__(self, model,parent = None):
         QtGui.QTableWidget.__init__(self, parent)
         self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(1) # Select Rows
         self.setModel(model)
         model.dataChanged.connect(self.dataChanged)
         model.updateRequested.connect(self.update)
         self.horizontalHeader().setDefaultSectionSize(120)
         self.horizontalHeader().setResizeMode(0, QtGui.QHeaderView.Stretch)
-    def mousePressEvent(self, e):
-        if e.button()==0x00000001:# Qt.LeftMouseButton
-            self.selectRow(self.rowAt(e.pos().y()))
-        if e.button()==0x00000002 and len(self.selectedIndexes())<8:
-            self.selectRow(self.rowAt(e.pos().y()))
     def contextMenuEvent(self, e):
         self.rel_pos = e.pos()
         self.rowClicked = self.rowAt(self.rel_pos.y())
@@ -223,6 +219,7 @@ class DownloadsTable(QtGui.QTableView):
             if row not in selected_rows:
                 selected_rows.append(row)
         self.model().removeDownloads(selected_rows)
+        self.clearSelection()
     def delete_selected(self):
         selected_rows = []
         for index in self.selectedIndexes():

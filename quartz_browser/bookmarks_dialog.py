@@ -31,6 +31,7 @@ class BookmarksTable(QtGui.QTableWidget):
     def __init__(self, bookmark_list):
         QtGui.QTableWidget.__init__(self, len(bookmark_list), 2)
         self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(1) # Select Rows
         self.setHorizontalHeaderLabels(["Title", "Address"])
 #        self.horizontalHeader().setDefaultSectionSize(240)
         self.horizontalHeader().setResizeMode(0, QtGui.QHeaderView.Stretch)
@@ -42,8 +43,6 @@ class BookmarksTable(QtGui.QTableWidget):
             for n, item in enumerate(self.data[m]):
                 newitem = QtGui.QTableWidgetItem(item)
                 self.setItem(m, n, newitem)
-    def mousePressEvent(self, e):
-        self.selectRow(self.rowAt(e.pos().y()))
     def mouseDoubleClickEvent(self, e):
         url = self.data[self.rowAt(e.pos().y())][1]
         self.doubleclicked.emit(url)
@@ -125,6 +124,7 @@ class HistoryTable(QtGui.QTableWidget):
     def __init__(self, history_list):
         QtGui.QTableWidget.__init__(self, len(history_list), 2)
         self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(1) # Select Rows
         self.setHorizontalHeaderLabels(["Time", "Address"])
         self.horizontalHeader().setDefaultSectionSize(120)
         self.horizontalHeader().setResizeMode(1, QtGui.QHeaderView.Stretch)
@@ -135,8 +135,6 @@ class HistoryTable(QtGui.QTableWidget):
             for n, item in enumerate(self.data[m]):
                 newitem = QtGui.QTableWidgetItem(item)
                 self.setItem(m, n, newitem)
-    def mousePressEvent(self, e):
-        self.selectRow(self.rowAt(e.pos().y()))
     def mouseDoubleClickEvent(self, e):
         url = self.data[self.rowAt(e.pos().y())][1]
         self.doubleclicked.emit(url)

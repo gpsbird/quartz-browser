@@ -42,7 +42,7 @@ Last Update :
 """
 # TODO : 
 #        
-# FIXME : Clear selections after deleting downloads/bookmarks
+# FIXME : 
 #         
 
 __version__ = "1.9.1"
