@@ -513,6 +513,7 @@ class Main(QMainWindow):
             self.pbar.hide()
         url =  self.tabWidget.currentWidget().url().toString()
         self.line.setText(url)
+        self.statusbar.hide()
         if validYoutubeUrl(url):
             self.youtubeBtn.show()
         else:
