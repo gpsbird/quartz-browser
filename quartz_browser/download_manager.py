@@ -163,9 +163,9 @@ class DownloadsModel(QtCore.QAbstractTableModel):
         timestamps = []
         for row in selected_rows:
           timestamps.append(self.downloadlist[row-selected_rows.index(row)].timestamp)
-          if self.downloadlist[row-selected_rows.index(row)].progress != '- - -':
-            self.downloadlist[row-selected_rows.index(row)].download.abort()
-          self.downloadlist.pop(row-selected_rows.index(row)).deleteLater()
+          if self.downloadlist[row - selected_rows.index(row)].progress != '- - -':
+            self.downloadlist[row - selected_rows.index(row)].download.abort()
+          self.downloadlist.pop(row - selected_rows.index(row)).deleteLater()
         self.updateRequested.emit()
         self.deleteDownloadsRequested.emit(timestamps)
     def deleteDownloads(self, selected_rows):
@@ -213,19 +213,14 @@ class DownloadsTable(QtGui.QTableView):
         clipboard = QtGui.QApplication.clipboard()
         clipboard.setText(self.model().downloadlist[self.rowClicked].url)
     def remove_selected(self):
-        selected_rows = []
-        for index in self.selectedIndexes():
-            row = index.row()
-            if row not in selected_rows:
-                selected_rows.append(row)
+        rows = self.selectionModel().selectedRows()
+        selected_rows = [item.row() for item in rows]
+        selected_rows.sort()
         self.model().removeDownloads(selected_rows)
         self.clearSelection()
     def delete_selected(self):
-        selected_rows = []
-        for index in self.selectedIndexes():
-            row = index.row()
-            if row not in selected_rows:
-                selected_rows.append(row)
+        rows = self.selectionModel().selectedRows()
+        selected_rows = [item.row() for item in rows]
         self.model().deleteDownloads(selected_rows)
 
 class Downloads_Dialog(object):

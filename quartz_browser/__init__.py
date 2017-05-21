@@ -16,6 +16,8 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
+            Multiple Deletion of Bookmarks
+            Clear selections after deleting downloads
  v1.9.1     Dependency on libnotify-bin removed.
             File type select (jpg/png) when saving images
             Page export as JPG image support.

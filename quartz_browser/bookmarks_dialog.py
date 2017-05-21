@@ -6,6 +6,7 @@
 #      by: PyQt4 UI code generator 4.11.2
 #
 # WARNING! All changes made in this file will be lost!
+# FIXME : python list.sort() function is deprecated, use list.sorted() in python 3
 
 import sys
 from PyQt4 import QtCore, QtGui
@@ -50,12 +51,17 @@ class BookmarksTable(QtGui.QTableWidget):
         self.rel_pos = e.pos()
         offset = QtCore.QPoint(self.verticalHeader().width()+3,self.horizontalHeader().height()+3)
         menu = QtGui.QMenu(self)
-        menu.addAction("Copy Link", self.copyLink)
+        if len(self.selectionModel().selectedRows()) == 1:
+            menu.addAction("Copy Link", self.copyLink)
         menu.addAction("Delete", self.deleteitem)
         menu.exec_(self.mapToGlobal(self.rel_pos+offset))
     def deleteitem(self):
-        del self.data[self.rowAt(self.rel_pos.y())]
-        self.removeRow(self.rowAt(self.rel_pos.y()))
+        rows = self.selectionModel().selectedRows()
+        selected_rows = [item.row() for item in rows]
+        selected_rows.sort()
+        for row in selected_rows:
+            del self.data[row - selected_rows.index(row)]
+            self.removeRow(row - selected_rows.index(row))
     def copyLink(self):
         addr = self.data[self.rowAt(self.rel_pos.y())][1]
         QtGui.QApplication.clipboard().setText(addr)
@@ -138,14 +144,6 @@ class HistoryTable(QtGui.QTableWidget):
     def mouseDoubleClickEvent(self, e):
         url = self.data[self.rowAt(e.pos().y())][1]
         self.doubleclicked.emit(url)
-#    def contextMenuEvent(self, e):
-#        self.rel_pos = e.pos()
-#        menu = QtGui.QMenu(self)
-#        menu.addAction("Delete", self.deleteitem)
-#        menu.exec_(self.mapToGlobal(self.rel_pos))
-#    def deleteitem(self):
-#        del self.data[self.rowAt(self.rel_pos.y())]
-#        self.removeRow(self.rowAt(self.rel_pos.y()))
 
 class History_Dialog(object):
     def setupUi(self, Dialog, history_data):
