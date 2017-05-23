@@ -12,6 +12,7 @@ To save pages to read later, print feature can be used to save as pdf. And it ca
 To Install the browser open terminal inside quartz-browser-master directory.  
 And then run following command..  
     `sudo pip install .`  
+Quartz Browser will be automatically added to applications menu.  
 
 To uninstall run..  
     `sudo pip uninstall quartz-browser`

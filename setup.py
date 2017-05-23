@@ -25,7 +25,12 @@ Install python-qt4 (for PyQt4 module) in debian based distros''',
       ],
       packages=['quartz_browser', 'quartz_browser.pytube'],
       entry_points={
-          'console_scripts': ['quartz=quartz_browser.main:main', 'pytube=quartz_browser.pytube.__main__:main'],
+          'console_scripts': ['quartz=quartz_browser.main:main',
+                              'pytube=quartz_browser.pytube.__main__:main'],
       },
-#      include_package_data=True,
+      data_files=[
+                 ('share/applications', ['files/quartz.desktop']),
+                 ('share/icons', ['files/quartz-browser.png'])
+      ],
+      #include_package_data=True,
       zip_safe=False)
