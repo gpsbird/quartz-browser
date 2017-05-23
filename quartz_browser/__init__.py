@@ -16,8 +16,10 @@ Features =  Change User agent to mobile/desktop
             Tabbed browsing
             Download Manager with pause/resume support
 Last Update : 
-            Multiple Deletion of Bookmarks
+ 
+ v1.9.2     Multiple Deletion of Bookmarks
             Clear selections after deleting downloads
+            Clear statusbar on tab switch
  v1.9.1     Dependency on libnotify-bin removed.
             File type select (jpg/png) when saving images
             Page export as JPG image support.
@@ -42,9 +44,9 @@ Last Update :
 |   along with this program.  If not, see <http://www.gnu.org/licenses/>.  |
 ...........................................................................
 """
-# TODO : 
-#        
+# TODO : Edit bookmarks
+#        Page title in history
 # FIXME : 
 #         
 
-__version__ = "1.9.1"
+__version__ = "1.9.2"

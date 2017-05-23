@@ -45,7 +45,7 @@ def validUrl(url_str):
             validurl = True
     return validurl
 
-youtube_regex = re.compile('http(s)?\:\/\/(((m\.|www\.)?youtube\.com\/watch\?v=)|(youtu.be\/))([a-zA-Z0-9\-_])+')
+youtube_regex = re.compile('http(s)?\:\/\/(((m\.|www\.)?youtube\.com\/watch\?(v|.*&v)=)|(youtu.be\/))([a-zA-Z0-9\-_])+')
 
 def validYoutubeUrl(url):
     if youtube_regex.match(url):
